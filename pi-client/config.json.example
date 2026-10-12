@@ -1,0 +1,7 @@
+{
+  "url": "https://YOUR-SITE-NAME.netlify.app/api/telemetry",
+  "deviceId": "raspberrypi-living-room",
+  "deviceName": "Living Room Pi 4",
+  "apiKey": "your-secret-key-if-configured",
+  "interval": 10
+}
