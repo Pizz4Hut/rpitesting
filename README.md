@@ -140,13 +140,27 @@ python3 plc_gateway.py --info
 
 ระบบได้เตรียมไฟล์คอนฟิกสำเร็จรูปที่ผูกกับ **Official API Key & Device ID** ของแต่ละบอร์ดไว้เรียบร้อยแล้ว:
 
+> ⚠️ **หมายเหตุสำคัญก่อน Pull:** หากในบอร์ดเคยมีการแก้ไขหรือแตะไฟล์ `config_plc.json` ไว้ Git จะแจ้งเตือนและระงับการดึงไฟล์ใหม่ ทำให้มองไม่เห็นไฟล์ `config_proto1.json` **จำเป็นต้องสั่ง `git stash` เพื่อเคลียร์ค้างก่อนเสมอ**
+
 #### 📌 สำหรับเครื่องที่ 1: `gse-proto-1` (Master Gateway)
 * **Device ID:** `4045f327-2776-4f34-977e-64e307db648f`
 * **API Key:** `gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70`
 * **API Base:** `https://epc-edge-api-dev.up.railway.app/api`
-* **คำสั่งเปิดใช้งานบนบอร์ด 1:**
+* **คำสั่งอัปเดตและเปิดใช้งานบนบอร์ด 1 (ทำตามลำดับ):**
   ```bash
+  # 1. เข้าโฟลเดอร์ pi-client
   cd ~/edge-prototype-gen-1/pi-client
+
+  # 2. เก็บพักไฟล์ที่เคยแก้ค้างไว้ เพื่อไม่ให้ Git ชนกัน
+  git stash
+
+  # 3. ดึงโค้ดและไฟล์คอนฟิกใหม่ล่าสุดจาก GitHub
+  git pull origin main
+
+  # 4. เช็คดูว่าไฟล์คอนฟิกตัวใหม่มาแล้วแน่นอน
+  ls -la config_proto1.json
+
+  # 5. นำคอนฟิกไปใช้งานและรีสตาร์ท Service
   cp config_proto1.json config_plc.json
   plc-restart
   ```
@@ -155,9 +169,21 @@ python3 plc_gateway.py --info
 * **Device ID:** `24207b3f-da30-44e7-91f9-8d0067a5d1af`
 * **API Key:** `gs_505a9bb4652c76548e1f2c229ac3055a334b47e38e105192ce7dfb24d0e743c6`
 * **API Base:** `https://epc-edge-api-dev.up.railway.app/api`
-* **คำสั่งเปิดใช้งานบนบอร์ด 2:**
+* **คำสั่งอัปเดตและเปิดใช้งานบนบอร์ด 2 (ทำตามลำดับ):**
   ```bash
+  # 1. เข้าโฟลเดอร์ pi-client
   cd ~/edge-prototype-gen-1/pi-client
+
+  # 2. เก็บพักไฟล์ที่เคยแก้ค้างไว้
+  git stash
+
+  # 3. ดึงโค้ดและไฟล์คอนฟิกใหม่ล่าสุดจาก GitHub
+  git pull origin main
+
+  # 4. เช็คดูว่าไฟล์คอนฟิกตัวใหม่มาแล้วแน่นอน
+  ls -la config_proto2.json
+
+  # 5. นำคอนฟิกไปใช้งานและรีสตาร์ท Service
   cp config_proto2.json config_plc.json
   plc-restart
   ```

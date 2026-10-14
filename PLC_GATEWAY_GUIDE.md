@@ -240,17 +240,21 @@ sudo journalctl -u plc-gateway -f
 ```
 
 ### ขั้นตอนที่ 5: ติดตั้งและใช้งาน CLI Toolbox (คำสั่งลัดประจำตู้คอนโทรล)
-ติดตั้งชุดคำสั่งลัดเพื่อให้สามารถพิมพ์เรียกใช้งานได้จากทุกโฟลเดอร์ในระบบ:
+
+หากมีการอัปเดตโค้ดบน GitHub ให้ทำการดึงโค้ดล่าสุดลงมาก่อน (ใช้ `git stash` เพื่อป้องกัน Git conflict):
 ```bash
 cd ~/edge-prototype-gen-1/pi-client
+git stash
+git pull origin main
 ./install_toolbox.sh
 ```
-หลังจากติดตั้งแล้ว สามารถเรียกใช้งานคำสั่งต่อไปนี้ได้ทันที:
+หลังจากติดตั้งแล้ว สามารถเรียกใช้งานคำสั่งต่อไปนี้ได้ทันทีจากทุกโฟลเดอร์:
 * `plc-toolbox` : แสดงสารบัญคำสั่งลัดทั้งหมด
+* `plc-runtime` : ดูสถานะ Cloud Runtime สดๆ และ Last Seen At จาก Railway API
 * `plc-info` : ดู Hardware Profile, MAC Address, Serial และ Tailscale IP
 * `plc-diagnose` : ตรวจสุขภาพระบบอัตโนมัติ 7 จุด (PASS/WARN/FAIL)
 * `plc-test` : ทดสอบดึงค่า PLC และยิง API 1 รอบ
-* `plc-status` : เช็คสถานะ Background Service
+* `plc-status` : เช็คสถานะ Background Service 24/7
 * `plc-logs` : ดู Live Logs การทำงานแบบ Real-time
 * `plc-restart` : รีสตาร์ท Gateway แบบปลอดภัย
 * `plc-buffer` : ตรวจสอบจำนวนข้อมูลที่ค้างใน SQLite Offline Queue
