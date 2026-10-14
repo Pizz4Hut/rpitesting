@@ -138,7 +138,47 @@ EOF
 sudo chmod +x /usr/local/bin/plc-sim
 echo "  [✓] /usr/local/bin/plc-sim        -> Launch S7-1200 Simulator Server (Port 102)"
 
-# 12. plc-toolbox: Summary of all commands
+# 12. plc-runtime: Fetch and display live Cloud Runtime status from Railway
+sudo tee /usr/local/bin/plc-runtime > /dev/null <<EOF
+#!/usr/bin/env bash
+python3 -c "
+import json, urllib.request, os
+cfg_path = '${CONFIG_FILE}'
+if not os.path.exists(cfg_path):
+    print('Configuration file not found.')
+    exit(1)
+with open(cfg_path) as f:
+    cfg = json.load(f)
+dev_id = cfg.get('deviceId')
+base_url = cfg.get('api', {}).get('baseUrl', 'https://epc-edge-api-dev.up.railway.app/api').rstrip('/')
+api_key = cfg.get('api', {}).get('apiKey', '')
+url = f'{base_url}/edge/devices/{dev_id}'
+req = urllib.request.Request(url, headers={'x-api-key': api_key, 'User-Agent': 'CLI-Toolbox'})
+try:
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        data = json.loads(resp.read().decode())
+        print('======================================================================')
+        print('☁️  Live Cloud Edge Runtime & Device Status (Railway API)')
+        print('======================================================================')
+        print(f'Device Name:      {data.get(\"name\")}')
+        print(f'Device ID:        {data.get(\"id\")}')
+        print(f'Serial Number:    {data.get(\"serial_number\")}')
+        print(f'MAC Address:      {data.get(\"mac_address\")}')
+        print(f'Model:            {data.get(\"model\")}')
+        print(f'Cloud Status:     {data.get(\"status\")}')
+        print(f'Last Seen At:     {data.get(\"last_seen_at\")}')
+        asset = data.get('asset', {})
+        if asset:
+            print(f'Assigned Asset:   {asset.get(\"name\")} (ID: {asset.get(\"id\")})')
+        print('======================================================================')
+except Exception as e:
+    print(f'Failed to fetch Cloud Runtime: {e}')
+"
+EOF
+sudo chmod +x /usr/local/bin/plc-runtime
+echo "  [✓] /usr/local/bin/plc-runtime    -> Check Live Cloud Runtime Status"
+
+# 13. plc-toolbox: Summary of all commands
 sudo tee /usr/local/bin/plc-toolbox > /dev/null <<EOF
 #!/usr/bin/env bash
 echo "======================================================================"
@@ -152,6 +192,7 @@ echo "  plc-logs       : Live stream gateway journal logs (Ctrl+C to exit)"
 echo "  plc-restart    : Restart gateway service gracefully"
 echo "  plc-start      : Start gateway service"
 echo "  plc-stop       : Stop gateway service"
+echo "  plc-runtime    : Check live Cloud Runtime status and last seen at"
 echo "  plc-buffer     : Check SQLite Store-and-Forward offline buffer count"
 echo "  plc-burnin     : Run 24h stability burn-in simulation"
 echo "  plc-sim        : Start Siemens S7-1200 PLC server simulator (Port 102)"
