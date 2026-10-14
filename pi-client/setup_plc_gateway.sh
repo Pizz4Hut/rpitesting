@@ -32,21 +32,36 @@ chmod +x plc_simulator.py
 
 # 5. Install Systemd Service
 echo "⚙️  [5/5] Registering systemd background service..."
-if [ -f "plc-gateway.service" ]; then
-    CURRENT_DIR=$(pwd)
-    CURRENT_USER=$(whoami)
-    
-    # Adapt service path to current directory and user
-    sed -i "s|/home/pi/rpitesting/pi-client|$CURRENT_DIR|g" plc-gateway.service
-    sed -i "s|User=pi|User=$CURRENT_USER|g" plc-gateway.service
+CURRENT_DIR=$(pwd)
+CURRENT_USER=$(whoami)
 
-    sudo cp plc-gateway.service /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable plc-gateway.service
-    echo "✅ Systemd service 'plc-gateway' installed and enabled!"
-    echo "To start now: sudo systemctl start plc-gateway"
-    echo "To view logs: sudo journalctl -u plc-gateway -f"
-fi
+sudo tee /etc/systemd/system/plc-gateway.service > /dev/null <<EOF
+[Unit]
+Description=Siemens S7-1200 IoT Edge Gateway Service
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${CURRENT_USER}
+WorkingDirectory=${CURRENT_DIR}
+ExecStart=/usr/bin/python3 ${CURRENT_DIR}/plc_gateway.py --config ${CURRENT_DIR}/config_plc.json
+Restart=always
+RestartSec=5s
+Nice=-5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plc-gateway
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now plc-gateway.service
+echo "✅ Systemd service 'plc-gateway' installed, enabled, and started!"
+echo "To view live logs: sudo journalctl -u plc-gateway -f"
+
 
 echo "======================================================================"
 echo "🎉 Setup complete! You can now start or test the gateway:"
