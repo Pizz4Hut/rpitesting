@@ -21,22 +21,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger("S7ServerSim")
 
+from enum import IntEnum
+
 try:
     import snap7
     from snap7.server import Server
-    try:
-        from snap7.snap7types import srvAreaDB
-    except (ImportError, AttributeError):
-        try:
-            from snap7.types import srvAreaDB
-        except (ImportError, AttributeError):
-            try:
-                from snap7.type import srvAreaDB
-            except (ImportError, AttributeError):
-                srvAreaDB = 0
     HAS_SNAP7_SERVER = True
 except ImportError:
     HAS_SNAP7_SERVER = False
+
+
+def get_srv_db_area():
+    """Resolves the SrvArea.DB enum object required by python-snap7."""
+    for mod_name in ("snap7.type", "snap7.types", "snap7.snap7types", "snap7.server", "snap7.common", "snap7"):
+        try:
+            mod = __import__(mod_name, fromlist=["Area", "SrvArea", "srvAreaDB"])
+            for attr_name in ("SrvArea", "Area"):
+                if hasattr(mod, attr_name):
+                    enum_cls = getattr(mod, attr_name)
+                    if hasattr(enum_cls, "DB"):
+                        return enum_cls.DB
+            if hasattr(mod, "srvAreaDB"):
+                val = getattr(mod, "srvAreaDB")
+                if hasattr(val, "name"):
+                    return val
+        except Exception:
+            pass
+
+    # Fallback IntEnum with .name attribute if python-snap7 expects enum
+    class SrvAreaDBEnum(IntEnum):
+        DB = 0
+
+    return SrvAreaDBEnum.DB
 
 
 class S7ServerSimulator:
@@ -58,8 +74,9 @@ class S7ServerSimulator:
 
         try:
             self.server = Server()
-            # Register DB area (srvAreaDB = 0)
-            self.server.register_area(srvAreaDB, self.db_number, self.db_data)
+            area_db = get_srv_db_area()
+            # Register DB area
+            self.server.register_area(area_db, self.db_number, self.db_data)
             # Start server (requires root/sudo for port 102)
             self.server.start_to("0.0.0.0", tcp_port=self.port)
             self.running = True
