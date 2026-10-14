@@ -482,8 +482,14 @@ def main():
     parser.add_argument("--interval", type=int, default=None, help="Override transmission interval in seconds")
     parser.add_argument("--once", action="store_true", help="Run a single acquisition and transmit cycle, then exit")
     parser.add_argument("--info", action="store_true", help="Display Device ID, Serial Number, MAC addresses, and exit")
+    parser.add_argument("--diagnose", action="store_true", help="Run automated self-diagnosis and troubleshooting checks")
 
     args = parser.parse_args()
+
+    if args.diagnose:
+        from diagnose import run_full_diagnosis
+        run_full_diagnosis(args.config)
+        return
 
     gateway = EdgeGatewayService(
         config_path=args.config,

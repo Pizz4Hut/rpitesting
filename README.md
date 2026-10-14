@@ -266,6 +266,20 @@ sudo systemctl status plc-gateway
 sudo journalctl -u plc-gateway -f
 ```
 
+#### 4. ระบบตรวจเช็คสุขภาพและวินิจฉัยปัญหาอัตโนมัติ (Automated Self-Diagnosis & Troubleshooting):
+หากพบปัญหา หรือต้องการตรวจเช็คสุขภาพของระบบแบบรอบด้านก่อนส่งมอบงาน สามารถรันคำสั่งตรวจเช็คอัตโนมัติได้ทันที:
+```bash
+python3 plc_gateway.py --diagnose
+# หรือรันตรง: python3 diagnose.py
+```
+* ตรวจสอบอุณหภูมิ CPU, RAM, ความจุ SD Card
+* ตรวจสอบสถานะสาย LAN (eth0/eth1), การเชื่อมต่อ Gateway, และ DNS
+* ตรวจสอบการ Ping PLC และเช็คสถานะพอร์ต S7comm TCP 102
+* ตรวจสอบความพร้อมของ REST API ปลายทาง (Heartbeat & Telemetry)
+* ตรวจสอบความสมบูรณ์ของฐานข้อมูล SQLite WAL และคิวออฟไลน์
+* ทดสอบการสร้างรหัส PNR Code ตามสเปก Base32
+* สรุป Checklist พร้อมคำแนะนำวิธีแก้ไขปัญหา (Troubleshooting Tips) ให้อัตโนมัติ
+
 ---
 
 ---
@@ -297,6 +311,7 @@ sudo journalctl -u plc-gateway -f
 | :--- | :--- |
 | `plc_gateway.py` | โปรแกรมหลักของ Gateway (ดึงค่า PLC, ส่ง HTTP API, จัดการ Redundancy & Heartbeat) |
 | `sqlite_buffer.py` | ระบบฐานข้อมูล SQLite Store-and-Forward เก็บข้อมูลออฟไลน์ป้องกันข้อมูลสูญหาย |
+| `diagnose.py` | เครื่องมือตรวจเช็คสุขภาพระบบ วินิจฉัยปัญหา และให้คำแนะนำแก้ไขอัตโนมัติ (Self-Diagnosis) |
 | `pnr_generator.py` | โมดูลคำนวณรหัส PNR 6 หลัก Base32 (ตัด 0, 1, O, I) พร้อมระบบกันชน Collision-Free |
 | `s7_server_simulator.py`| โปรแกรมเปลี่ยน Raspberry Pi อีกตัวให้กลายเป็น Siemens S7-1200 PLC Server (Port 102) |
 | `plc_driver.py` | ไดรเวอร์ S7comm รองรับ Siemens S7-1200 และโหมดจำลอง Simulation |
