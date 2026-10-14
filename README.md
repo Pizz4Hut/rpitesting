@@ -190,25 +190,6 @@ python3 plc_gateway.py --info
 
 ---
 
-### ขั้นตอนที่ 5: การรันบอร์ดที่ 3 เป็น Siemens S7-1200 PLC Simulator (Port 102)
-
-1. บนบอร์ดที่ 3 (`dgpx@edge-gateway` IP: `192.168.2.2`):
-   ```bash
-   sudo apt update && sudo apt install -y git libsnap7-dev libsnap7-1 python3-pip
-   sudo pip3 install python-snap7 --break-system-packages
-   git clone git@github.com:Pizz4Hut/edge-prototype-gen-1.git
-   cd edge-prototype-gen-1/pi-client
-   ```
-2. รันจำลองตู้ PLC (ต้องใช้ `sudo` เพราะพอร์ต 102 เป็น Well-known port):
-   ```bash
-   sudo python3 s7_server_simulator.py
-   ```
-   * ตัวจำลองจะสร้าง **Data Block 1 (DB1)** ขนาด 128 ไบต์
-   * ป้อนค่าจำลอง 19 Tags สดๆ ทุก 2 วินาที
-   * อ่านค่าและตรวจสอบ **Gateway Lifebit (`DB1.DBX0.0`)** จาก Gateway ทั้ง 2 เครื่อง
-
----
-
 ## 🧰 IoT Edge Gateway CLI Toolbox (ชุดคำสั่งลัดประจำตู้คอนโทรล)
 
 เพื่อให้วิศวกรหน้างานและผู้ดูแลระบบสามารถสั่งการได้สะดวกรวดเร็วที่สุด **โดยไม่ต้องจำชื่อโฟลเดอร์หรือพิมพ์ `cd` เข้าไปก่อน** ระบบได้ติดตั้งคำสั่งลัดระดับระบบ (Global Commands ใน `/usr/local/bin`) ไว้ให้ใช้งานได้จากทุกที่ใน Terminal ทันที:
