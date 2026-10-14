@@ -209,15 +209,17 @@ chmod +x setup_plc_gateway.sh
 ./setup_plc_gateway.sh
 ```
 
-### ขั้นตอนที่ 2: ทดสอบระบบในโหมดจำลอง (Simulation Test ตาม TOR ข้อ 2.3)
-หากยังไม่ได้ต่อสายเข้าตู้ PLC จริง สามารถทดสอบส่งค่าจำลอง 19 Tags ขึ้น API ได้ทันที:
+### ขั้นตอนที่ 2: ทดสอบการเชื่อมต่อตู้ PLC S7-1200 จริง (Physical PLC Connection Test)
+ระบบทำงานกับตู้ PLC S7-1200 จริงเท่านั้น โดย **ถอดระบบ Simulation (Mock Data) ออกทั้งหมด**:
+* หากยังไม่เชื่อมต่อสาย LAN หรือตู้ PLC ดับ: ระบบจะแจ้งเตือนว่า `⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP 192.168.2.2:102! ให้เชื่อมต่อข้อมูลจาก PLC`
+* เมื่อเชื่อมต่อสาย LAN กับตู้ PLC จริง: Gateway จะอ่าน 19 Tags และยิงขึ้น Cloud ทันที
 
 ```bash
-# ทดสอบรัน 1 รอบ (อ่านค่า + ยิง API + ส่ง Heartbeat)
-python3 plc_gateway.py --mock --once
+# ทดสอบรัน 1 รอบ (อ่านค่าจริงจาก PLC + ส่ง Cloud Runtime + ยิง Heartbeat)
+plc-test
 
-# ทดสอบรันต่อเนื่องจำลองความถี่ส่งทุก 10 วินาที
-python3 plc_gateway.py --mock --interval 10
+# หรือใช้คำสั่งตรง:
+python3 plc_gateway.py --once
 ```
 
 ### ขั้นตอนที่ 3: รันการทดสอบ Burn-in Test 24 ชั่วโมง (TOR ข้อ 2.3.2)
