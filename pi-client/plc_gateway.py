@@ -118,9 +118,9 @@ def get_mac_address(ifname="eth0"):
     try:
         import fcntl
         import struct
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15].encode('utf-8')))
-        return ':'.join(['%02x' % b for b in info[18:24]])
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15].encode('utf-8')))
+            return ':'.join(['%02x' % b for b in info[18:24]])
     except Exception:
         pass
 
@@ -155,20 +155,18 @@ def get_interface_ip(ifname):
     try:
         import fcntl
         import struct
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        return socket.inet_ntoa(fcntl.ioctl(
-            s.fileno(),
-            0x8915,  # SIOCGIFADDR
-            struct.pack('256s', ifname[:15].encode('utf-8'))
-        )[20:24])
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            return socket.inet_ntoa(fcntl.ioctl(
+                s.fileno(),
+                0x8915,  # SIOCGIFADDR
+                struct.pack('256s', ifname[:15].encode('utf-8'))
+            )[20:24])
     except Exception:
         # Fallback for testing/Mac
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                return s.getsockname()[0]
         except Exception:
             return "127.0.0.1"
 

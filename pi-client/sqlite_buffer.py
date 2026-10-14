@@ -7,7 +7,7 @@ Provides persistent, crash-safe local offline queue for telemetry data.
 import sqlite3
 import json
 import time
-import os
+from contextlib import contextmanager
 import logging
 
 logger = logging.getLogger("SQLiteBuffer")
@@ -18,12 +18,17 @@ class SQLiteBuffer:
         self.max_records = max_records
         self._init_db()
 
+    @contextmanager
     def _get_connection(self):
         conn = sqlite3.connect(self.db_path, timeout=10.0)
         # Enable WAL mode for high concurrency and crash resilience
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_db(self):
         with self._get_connection() as conn:
