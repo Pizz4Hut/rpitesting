@@ -61,11 +61,32 @@ def run_burnin_test(config_path="config_plc.json", duration_hours=24, interval_s
             # 2. Transmit to API
             api_cfg = gateway.config.get("api", {})
             telemetry_url = api_cfg.get("telemetryUrl")
+            timestamp_ms = int(time.time() * 1000)
+
+            # Generate PNR code
+            try:
+                from pnr_generator import generate_pnr
+                pnr_code = generate_pnr({
+                    "org_id": gateway.org_id,
+                    "deviceId": gateway.device_id,
+                    "batch": {"collected_at": timestamp_ms, "sequence": total_cycles}
+                })
+            except Exception:
+                pnr_code = "BURNT1"
 
             payload = {
-                "deviceId": gateway.config.get("deviceId"),
-                "deviceName": gateway.config.get("deviceName"),
-                "timestamp": int(time.time() * 1000),
+                "pnrCode": pnr_code,
+                "org_id": getattr(gateway, "org_id", "GSE"),
+                "batch": {
+                    "pnr_code": pnr_code,
+                    "sequence": total_cycles,
+                    "collected_at": timestamp_ms
+                },
+                "deviceId": gateway.device_id,
+                "deviceName": gateway.device_name,
+                "serialNumber": gateway.serial_number,
+                "macAddress": gateway.mac_addresses.get("lan2_internet") or gateway.mac_addresses.get("lan1_plc"),
+                "timestamp": timestamp_ms,
                 "system": {
                     "cpuTemp": 48.5,
                     "cpuUsage": 14.2,
@@ -74,7 +95,7 @@ def run_burnin_test(config_path="config_plc.json", duration_hours=24, interval_s
                 },
                 "plc": {
                     "connected": True,
-                    "simulated": True,
+                    "simulated": gateway.plc.simulate,
                     "tagCount": len(tags_data),
                     "tags": tags_data
                 },
