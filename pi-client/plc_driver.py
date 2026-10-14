@@ -425,13 +425,61 @@ class S7PLCClient:
             return None
 
     def read_all_tags(self, tag_list):
-        """Reads multiple tags from physical PLC. If disconnected, returns empty dict."""
+        """Reads multiple tags from physical PLC with Bulk Read Optimization."""
         if not self.is_connected():
             self.connect()
             if not self.is_connected():
                 logger.warning(f"⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.ip}:{self.port}! กรุณาเชื่อมต่อสาย LAN หรือเปิดตู้ PLC")
                 return {}
 
+        # 1. Check if all tags belong to the same DB and can be read in a single bulk block
+        parsed_tags = []
+        same_db = True
+        target_db = None
+
+        for tag_cfg in tag_list:
+            addr = tag_cfg.get("address", "")
+            p = self.parse_address(addr)
+            if not p or p["area"] != "DB":
+                same_db = False
+                break
+            if target_db is None:
+                target_db = p["db"]
+            elif p["db"] != target_db:
+                same_db = False
+                break
+
+            dtype = tag_cfg.get("type", "REAL").upper()
+            size = p["size"]
+            if dtype in ("REAL", "DINT", "DWORD"):
+                size = max(size, 4)
+            elif dtype in ("INT", "WORD"):
+                size = max(size, 2)
+            parsed_tags.append((tag_cfg, p, size))
+
+        if same_db and parsed_tags and self.client:
+            min_start = min(p["start"] for _, p, _ in parsed_tags)
+            max_end = max(p["start"] + size for _, p, size in parsed_tags)
+            total_bytes = max_end - min_start
+
+            # If contiguous block is within standard S7 PDU payload limit (<= 256 bytes)
+            if min_start == 0 and total_bytes <= 256:
+                try:
+                    raw_block = self.client.read_area(Areas.DB, target_db, min_start, total_bytes)
+                    if raw_block and len(raw_block) >= total_bytes:
+                        results = {}
+                        for tag_cfg, p, size in parsed_tags:
+                            tag_name = tag_cfg.get("name", tag_cfg.get("address"))
+                            offset = p["start"] - min_start
+                            raw_slice = raw_block[offset : offset + size]
+                            val_info = format_sensor_reading(tag_cfg, raw_slice, p)
+                            if val_info:
+                                results[tag_name] = val_info
+                        return results
+                except Exception as e:
+                    logger.debug(f"Bulk read fallback: {e}")
+
+        # 2. Fallback to individual tag reads
         results = {}
         for tag_cfg in tag_list:
             tag_name = tag_cfg.get("name", tag_cfg.get("address"))

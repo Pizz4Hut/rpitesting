@@ -188,6 +188,24 @@ def get_tailscale_ip():
     return get_interface_ip("tailscale0")
 
 
+KNOWN_DEVICE_PROFILES = [
+    {
+        "name": "GSE-PROTO-1",
+        "mac_addresses": ["98:fe:54:63:34:ca", "98:FE:54:63:34:CA"],
+        "cpu_serials": ["1000000091f9071a"],
+        "deviceId": "4045f327-2776-4f34-977e-64e307db648f",
+        "apiKey": "gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70"
+    },
+    {
+        "name": "GSE-PROTO-2",
+        "mac_addresses": ["98:fe:54:63:35:a5", "98:FE:54:63:35:A5"],
+        "cpu_serials": ["100000001b657629"],
+        "deviceId": "24207b3f-da30-44e7-91f9-8d0067a5d1af",
+        "apiKey": "gs_505a9bb4652c76548e1f2c229ac3055a334b47e38e105192ce7dfb24d0e743c6"
+    }
+]
+
+
 class EdgeGatewayService:
     def __init__(self, config_path="config_plc.json", simulate_override=None):
         self.config_path = config_path
@@ -219,6 +237,11 @@ class EdgeGatewayService:
             "lan2_internet": get_mac_address(self.lan2_if)
         }
 
+        # Auto-detect Network Roles and Hardware Profile
+        self.auto_detect_network_roles()
+        self.auto_detect_hardware_profile()
+        self.last_emergency_state = False
+
         # Initialize SQLite Store-and-Forward Buffer
         db_path = self.config.get("redundancy", {}).get("sqliteDbPath", "buffer.db")
         if not os.path.isabs(db_path):
@@ -248,6 +271,108 @@ class EdgeGatewayService:
         api_cfg = self.config.get("api", {})
         self.api_base_url = api_cfg.get("baseUrl", "https://epc-edge-api-dev.up.railway.app/api").rstrip("/")
         self.runtime_id = None
+
+    def auto_detect_network_roles(self):
+        """Auto-detects default gateway interface from /proc/net/route.
+        Swaps LAN1 (PLC) and LAN2 (Internet) interfaces if cables were accidentally reversed.
+        """
+        route_file = "/proc/net/route"
+        if not os.path.exists(route_file):
+            return
+
+        try:
+            default_iface = None
+            with open(route_file, "r") as f:
+                for line in f:
+                    parts = line.strip().split()
+                    # Destination is parts[1] (hex 00000000 means 0.0.0.0 / default route)
+                    if len(parts) >= 2 and parts[1] == "00000000":
+                        default_iface = parts[0]
+                        break
+
+            if default_iface:
+                # If the default route interface is currently assigned to LAN1 (PLC interface),
+                # but LAN2 was meant for Internet, the physical Ethernet cables are swapped.
+                if default_iface == self.lan1_if and default_iface != self.lan2_if:
+                    logger.warning(
+                        f"🔄 [AUTO-NETWORK] ตรวจพบสาย LAN สลับพอร์ต! Internet Default Gateway อยู่ที่ {default_iface}. "
+                        f"ทำการสลับบทบาท {default_iface} -> LAN2 (Internet) และ {self.lan2_if} -> LAN1 (PLC) อัตโนมัติ"
+                    )
+                    self.lan1_if, self.lan2_if = self.lan2_if, self.lan1_if
+                    self.mac_addresses = {
+                        "lan1_plc": get_mac_address(self.lan1_if),
+                        "lan2_internet": get_mac_address(self.lan2_if)
+                    }
+                else:
+                    logger.debug(f"[AUTO-NETWORK] Default route confirmed on {default_iface}")
+        except Exception as e:
+            logger.debug(f"[AUTO-NETWORK] Route inspection skipped: {e}")
+
+    def auto_detect_hardware_profile(self):
+        """Matches Raspberry Pi CPU serial / MAC address against known prototype hardware profiles.
+        Automatically binds Device UUID and API Key so SD card can be cloned/moved without manual setup.
+        """
+        macs = [m.lower() for m in self.mac_addresses.values() if m]
+        cur_serial = (self.serial_number or "").lower()
+
+        matched_profile = None
+        for prof in KNOWN_DEVICE_PROFILES:
+            prof_macs = [m.lower() for m in prof.get("mac_addresses", [])]
+            prof_serials = [s.lower() for s in prof.get("cpu_serials", [])]
+
+            if cur_serial in prof_serials or any(m in prof_macs for m in macs):
+                matched_profile = prof
+                break
+
+        if matched_profile:
+            logger.info(
+                f"🎯 [AUTO-PROFILE] ตรวจพบลักษณะเฉพาะฮาร์ดแวร์: {matched_profile['name']} "
+                f"(SN: {self.serial_number}) -> ผูก Device UUID & API Key อัตโนมัติ"
+            )
+            self.device_id = matched_profile["deviceId"]
+            self.device_name = matched_profile["name"]
+            self.config["deviceId"] = matched_profile["deviceId"]
+            self.config["deviceName"] = matched_profile["name"]
+            self.config.setdefault("api", {})["apiKey"] = matched_profile["apiKey"]
+
+    def check_emergency_event(self):
+        """Polls emergency safety tags (E-Stop and Machine Fault) every 2s.
+        If an emergency transition occurs (e.g., E-Stop triggered or fault raised),
+        triggers immediate cloud transmission instead of waiting for standard 60-min interval.
+        """
+        if not self.plc.is_connected():
+            return False
+
+        try:
+            # DB1 byte 60 contains DBX60.0 (running), DBX60.1 (fault), DBX60.2 (estop_ok)
+            # DB1 byte 62-63 contains DBW62 (active alarm code)
+            b_fault = self.plc.read_tag("DB1.DBX60.1", "BOOL")
+            b_estop = self.plc.read_tag("DB1.DBX60.2", "BOOL")
+            alarm_code = self.plc.read_tag("DB1.DBW62", "INT")
+
+            is_fault = bool(b_fault) if b_fault is not None else False
+            # emergency_stop_ok: True is healthy/OK, False is E-Stop pressed/tripped!
+            is_estop_tripped = (b_estop is False) if b_estop is not None else False
+            has_alarm = bool(alarm_code and alarm_code > 0)
+
+            is_emergency = is_fault or is_estop_tripped or has_alarm
+
+            # Trigger only on rising edge (transition from normal to emergency)
+            if is_emergency and not self.last_emergency_state:
+                logger.warning(
+                    f"🚨 [EMERGENCY-TRIGGER] ตรวจพบเหตุฉุกเฉินกะทันหัน! "
+                    f"(Fault: {is_fault}, E-Stop Tripped: {is_estop_tripped}, Alarm: {alarm_code}) "
+                    f"-> ข้ามรอบเวลาปกติ ส่งข้อมูลขึ้น Cloud API ทันที!"
+                )
+                self.last_emergency_state = True
+                return True
+            elif not is_emergency:
+                self.last_emergency_state = False
+
+        except Exception as e:
+            logger.debug(f"[EMERGENCY-CHECK] Error checking safety status: {e}")
+
+        return False
 
     def _load_config(self):
         target_path = self.config_path
@@ -691,6 +816,7 @@ class EdgeGatewayService:
         last_trans_time = time.time()
         last_hb_time = time.time()
         last_lifebit_time = time.time()
+        last_emergency_check = time.time()
 
         while self.running:
             now = time.time()
@@ -706,7 +832,14 @@ class EdgeGatewayService:
                 self.send_heartbeat()
                 last_hb_time = now
 
-            # 3. Scheduled Data Acquisition & Transmission (TOR every 60 mins)
+            # 3. Emergency Event Fast-Poll (every 2 seconds)
+            if now - last_emergency_check >= 2:
+                if self.check_emergency_event():
+                    self.transmit_telemetry()
+                    last_trans_time = now
+                last_emergency_check = now
+
+            # 4. Scheduled Data Acquisition & Transmission (TOR every 60 mins)
             if now - last_trans_time >= trans_interval:
                 self.transmit_telemetry()
                 last_trans_time = now
