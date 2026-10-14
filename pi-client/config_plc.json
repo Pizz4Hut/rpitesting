@@ -1,14 +1,12 @@
 {
-  "deviceId": "edge-prototype-gen1-001",
-  "deviceName": "Edge Prototype Gen-1",
+  "deviceId": "4045f327-2776-4f34-977e-64e307db648f",
+  "deviceName": "GSE-PROTO-1",
   "serialNumber": "auto",
   "repository": "https://github.com/Pizz4Hut/edge-prototype-gen-1.git",
   "api": {
-    "telemetryUrl": "https://rpi11232.netlify.app/api/telemetry",
-    "batchTelemetryUrl": "https://rpi11232.netlify.app/api/telemetry/batch",
-    "heartbeatUrl": "https://rpi11232.netlify.app/api/heartbeat",
-    "apiKey": "",
-    "transmissionIntervalSec": 3600,
+    "baseUrl": "https://epc-edge-api-dev.up.railway.app/api",
+    "apiKey": "gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70",
+    "transmissionIntervalSec": 60,
     "heartbeatIntervalSec": 30,
     "httpTimeoutSec": 15
   },

@@ -217,9 +217,17 @@ def run_full_diagnosis(config_path="config_plc.json"):
     # 4. REST API ENDPOINTS
     # -------------------------------------------------------------
     print_header("4. REST API Endpoint Health")
-    api_cfg = config.get("api", {})
-    heartbeat_url = api_cfg.get("heartbeatUrl", "")
-    telemetry_url = api_cfg.get("telemetryUrl", "")
+    base_url = api_cfg.get("baseUrl", "").rstrip("/")
+    dev_id = config.get("deviceId", "")
+    if base_url and dev_id:
+        device_url = f"{base_url}/edge/devices/{dev_id}"
+        print(f"{INFO_BADGE} Cloud Device Target: {device_url}")
+        dev_ok, dev_msg = test_http_url(device_url)
+        if dev_ok:
+            print(f"{PASS_BADGE} Cloud Device Registration: {dev_msg}")
+        else:
+            print(f"{WARN_BADGE} Cloud Device Registration: {dev_msg}")
+            issues.append(f"Cloud device endpoint error: {dev_msg}")
 
     print(f"{INFO_BADGE} Heartbeat Target: {heartbeat_url}")
     hb_ok, hb_msg = test_http_url(heartbeat_url)

@@ -4,11 +4,9 @@
   "serialNumber": "auto",
   "repository": "https://github.com/Pizz4Hut/edge-prototype-gen-1.git",
   "api": {
-    "telemetryUrl": "https://epc-edge-api-dev.up.railway.app/api/devices/telemetry",
-    "batchTelemetryUrl": "https://epc-edge-api-dev.up.railway.app/api/devices/batch",
-    "heartbeatUrl": "https://epc-edge-api-dev.up.railway.app/api/devices/heartbeat",
+    "baseUrl": "https://epc-edge-api-dev.up.railway.app/api",
     "apiKey": "gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70",
-    "transmissionIntervalSec": 3600,
+    "transmissionIntervalSec": 60,
     "heartbeatIntervalSec": 30,
     "httpTimeoutSec": 15
   },

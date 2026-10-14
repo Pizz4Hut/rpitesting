@@ -20,6 +20,7 @@ import threading
 import signal
 import urllib.request
 import urllib.error
+from datetime import datetime, timezone
 
 # Local modules
 from plc_driver import S7PLCClient
@@ -241,6 +242,11 @@ class EdgeGatewayService:
         self.last_transmission = 0
         self.last_lifebit_val = False
 
+        # Cloud API Base URL & Runtime Session
+        api_cfg = self.config.get("api", {})
+        self.api_base_url = api_cfg.get("baseUrl", "https://epc-edge-api-dev.up.railway.app/api").rstrip("/")
+        self.runtime_id = None
+
     def _load_config(self):
         target_path = self.config_path
         if not os.path.exists(target_path):
@@ -291,13 +297,31 @@ class EdgeGatewayService:
             }
         }
 
+    def start_runtime(self):
+        """Initializes a new Edge Runtime session on Cloud API (POST /edge/devices/{deviceId}/runtimes)."""
+        url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes"
+        metadata = {
+            "hostname": socket.gethostname(),
+            "serialNumber": self.serial_number,
+            "macAddresses": self.mac_addresses,
+            "model": "Raspberry Pi 4 Model B",
+            "version": "2.0.0"
+        }
+        try:
+            status, resp_body = self.send_http_post(url, {"metadata": metadata})
+            if status in (200, 201):
+                res_data = json.loads(resp_body)
+                self.runtime_id = res_data.get("id")
+                logger.info(f"✨ Cloud Runtime ACTIVATED: {self.runtime_id}")
+                return True
+            else:
+                logger.warning(f"⚠️ Start runtime returned HTTP {status}: {resp_body}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to start runtime session: {e}")
+        return False
+
     def send_heartbeat(self):
         """Sends Gateway Heartbeat to Web API."""
-        api_cfg = self.config.get("api", {})
-        heartbeat_url = api_cfg.get("heartbeatUrl", "")
-        if not heartbeat_url:
-            return
-
         sys_metrics = get_system_metrics()
         net_status = self.get_network_status()
         queue_depth = self.buffer.get_queue_depth()
@@ -324,15 +348,37 @@ class EdgeGatewayService:
             "network": net_status
         }
 
-        try:
-            status_code, body = self.send_http_post(
-                heartbeat_url,
-                payload,
-                timeout=api_cfg.get("httpTimeoutSec", 10)
-            )
-            logger.info(f"💓 Heartbeat OK ({status_code}) | PLC Connected: {self.plc.is_connected()} | Queue: {queue_depth}")
-        except Exception as e:
-            logger.warning(f"💔 Heartbeat delivery failed: {e}")
+        # Ensure runtime session is active
+        if not self.runtime_id:
+            self.start_runtime()
+
+        if self.runtime_id:
+            url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/heartbeat"
+            try:
+                status_code, body = self.send_http_post(url, payload, timeout=10)
+                logger.info(f"💓 Heartbeat OK (HTTP {status_code}) | Runtime: {self.runtime_id[:8]}... | PLC: {self.plc.is_connected()} | Queue: {queue_depth}")
+                return
+            except urllib.error.HTTPError as e:
+                if e.code == 409:
+                    logger.warning("⚠️ Runtime closed on server (HTTP 409). Starting new runtime...")
+                    if self.start_runtime():
+                        url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/heartbeat"
+                        self.send_http_post(url, payload, timeout=10)
+                        logger.info(f"💓 Heartbeat recovered on new runtime ({self.runtime_id[:8]}...)")
+                    return
+                else:
+                    logger.warning(f"💔 Heartbeat delivery failed: HTTP {e.code}")
+            except Exception as e:
+                logger.warning(f"💔 Heartbeat delivery failed: {e}")
+        else:
+            api_cfg = self.config.get("api", {})
+            heartbeat_url = api_cfg.get("heartbeatUrl", "")
+            if heartbeat_url and "railway" not in heartbeat_url:
+                try:
+                    status_code, body = self.send_http_post(heartbeat_url, payload, timeout=api_cfg.get("httpTimeoutSec", 10))
+                    logger.info(f"💓 Heartbeat OK ({status_code}) | PLC Connected: {self.plc.is_connected()} | Queue: {queue_depth}")
+                except Exception as e:
+                    logger.warning(f"💔 Heartbeat delivery failed: {e}")
 
     def acquire_plc_data(self):
         """Reads all configured tags from Siemens S7-1200 PLC."""
@@ -342,17 +388,13 @@ class EdgeGatewayService:
 
     def transmit_telemetry(self):
         """Gathers PLC tags, system metrics, and sends to REST API. Buffers on failure."""
-        api_cfg = self.config.get("api", {})
-        telemetry_url = api_cfg.get("telemetryUrl", "")
-        timeout = api_cfg.get("httpTimeoutSec", 15)
-
         tags_data = self.acquire_plc_data()
         sys_metrics = get_system_metrics()
         net_status = self.get_network_status()
         queue_depth = self.buffer.get_queue_depth()
 
-        # Generate PNR Reference Code according to Crockford Base32 specification
         timestamp_ms = int(time.time() * 1000)
+        now_iso = datetime.now(timezone.utc).isoformat()
         current_seq = self.sequence
         self.sequence += 1
 
@@ -366,78 +408,95 @@ class EdgeGatewayService:
                 }
             }, db_conn=conn)
 
-        payload = {
-            "pnrCode": pnr_code,
-            "org_id": self.org_id,
-            "batch": {
-                "pnr_code": pnr_code,
-                "sequence": current_seq,
-                "collected_at": timestamp_ms
-            },
-            "deviceId": self.device_id,
-            "deviceName": self.device_name,
-            "serialNumber": self.serial_number,
-            "macAddress": self.mac_addresses.get("lan2_internet") or self.mac_addresses.get("lan1_plc"),
-            "macAddresses": self.mac_addresses,
-            "timestamp": timestamp_ms,
-            "system": sys_metrics,
-            "plc": {
-                "connected": self.plc.is_connected(),
-                "ip": self.plc.ip,
-                "tagCount": len(tags_data),
-                "tags": tags_data,
-                "simulated": self.plc.simulate
-            },
-            "redundancy": {
-                "bufferQueueDepth": queue_depth,
-                "storeAndForwardActive": True,
-                "transmissionIntervalSec": api_cfg.get("transmissionIntervalSec", 3600)
-            },
-            "network": net_status
+        if isinstance(tags_data, dict):
+            tags_dict = {name: info.get("value") for name, info in tags_data.items()}
+        else:
+            tags_dict = {t.get("name", ""): t.get("value") for t in tags_data}
+
+        # Railway Edge Runtime Batch Schema
+        batch_payload = {
+            "sequence": current_seq,
+            "sequenceRef": f"{pnr_code}-{current_seq}",
+            "collectedAt": now_iso,
+            "events": [
+                {
+                    "timestamp": now_iso,
+                    "payload": {
+                        "pnr_code": pnr_code,
+                        "device_id": self.device_id,
+                        "device_name": self.device_name,
+                        "tags": tags_dict,
+                        "raw_tags": tags_data,
+                        "system": sys_metrics,
+                        "plc": {
+                            "connected": self.plc.is_connected(),
+                            "ip": self.plc.ip,
+                            "simulated": self.plc.simulate
+                        },
+                        "network": net_status
+                    }
+                }
+            ]
         }
 
-        # Try transmitting over HTTP/HTTPS REST API
-        try:
-            status_code, response_body = self.send_http_post(telemetry_url, payload, timeout=timeout)
-            logger.info(f"✅ Data Transmitted (HTTP {status_code}) | PNR: {pnr_code} (Seq #{current_seq}) | Tags: {len(tags_data)} | Buffer: {queue_depth}")
+        if not self.runtime_id:
+            self.start_runtime()
 
-            # If success and there are pending backlog items, drain buffer!
-            if queue_depth > 0:
-                self.drain_offline_buffer()
+        transmitted = False
+        if self.runtime_id:
+            url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/batches"
+            try:
+                status_code, response_body = self.send_http_post(url, batch_payload, timeout=15)
+                logger.info(f"✅ Data Transmitted (HTTP {status_code}) | PNR: {pnr_code} (Seq #{current_seq}) | Runtime: {self.runtime_id[:8]}... | Tags: {len(tags_data)} | Buffer: {queue_depth}")
+                transmitted = True
+                if queue_depth > 0:
+                    self.drain_offline_buffer()
+            except urllib.error.HTTPError as e:
+                if e.code == 409:
+                    logger.warning("⚠️ Runtime closed (HTTP 409). Restarting runtime session...")
+                    if self.start_runtime():
+                        url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/batches"
+                        status_code, _ = self.send_http_post(url, batch_payload, timeout=15)
+                        logger.info(f"✅ Data Transmitted after restart (HTTP {status_code}) | PNR: {pnr_code}")
+                        transmitted = True
+                else:
+                    logger.warning(f"⚠️ API Error HTTP {e.code}. Buffering data to SQLite...")
+            except Exception as e:
+                logger.warning(f"⚠️ Network/API Error ({e}). Buffering data to SQLite...")
 
-        except Exception as e:
-            # REDUNDANCY: Store-and-Forward
-            logger.warning(f"⚠️ Network/API Error ({e}). Buffering data to SQLite...")
-            row_id = self.buffer.enqueue(payload, pnr_code=pnr_code)
+        if not transmitted:
+            # Buffer data to SQLite
+            row_id = self.buffer.enqueue(batch_payload, pnr_code=pnr_code)
             new_depth = self.buffer.get_queue_depth()
             logger.info(f"📦 Record buffered safely into SQLite (PNR: {pnr_code}, ID: {row_id}, Queue depth: {new_depth})")
 
     def drain_offline_buffer(self):
         """Replays offline queued records to REST API in batches once connectivity is restored."""
-        api_cfg = self.config.get("api", {})
-        batch_url = api_cfg.get("batchTelemetryUrl", api_cfg.get("telemetryUrl"))
-        limit = self.config.get("redundancy", {}).get("batchDrainLimit", 20)
+        if not self.runtime_id:
+            if not self.start_runtime():
+                return
 
+        limit = self.config.get("redundancy", {}).get("batchDrainLimit", 20)
         pending = self.buffer.get_pending_batch(limit=limit)
         if not pending:
             return
 
         logger.info(f"🔄 Redundancy Drainer: Found {len(pending)} buffered records. Replaying backlog...")
+        url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/batches"
 
-        batch_payload = [item["payload"] for item in pending]
-        queue_ids = [item["queue_id"] for item in pending]
-
-        try:
-            status_code, body = self.send_http_post(batch_url, batch_payload, timeout=20)
-            if 200 <= status_code < 300:
-                self.buffer.mark_sent(queue_ids)
-                rem = self.buffer.get_queue_depth()
-                logger.info(f"🎉 Replayed {len(queue_ids)} backlog records successfully! Remaining queue: {rem}")
-            else:
-                self.buffer.increment_retry(queue_ids)
-        except Exception as e:
-            logger.warning(f"Replay drain attempt failed: {e}. Will retry later.")
-            self.buffer.increment_retry(queue_ids)
+        for item in pending:
+            q_id = item["queue_id"]
+            payload = item["payload"]
+            try:
+                status_code, body = self.send_http_post(url, payload, timeout=15)
+                if status_code in (200, 201):
+                    self.buffer.mark_sent([q_id])
+                    logger.info(f"  [✓] Replayed buffered batch ID {q_id} (HTTP {status_code})")
+                else:
+                    self.buffer.increment_retry([q_id])
+            except Exception as e:
+                logger.warning(f"Replay drain item {q_id} failed: {e}")
+                self.buffer.increment_retry([q_id])
 
     def start(self):
         """Main service execution loop."""
@@ -494,8 +553,16 @@ class EdgeGatewayService:
             time.sleep(1)
 
     def stop(self):
-        """Stops the gateway gracefully."""
+        """Stops the gateway gracefully and closes runtime session."""
         self.running = False
+        if self.runtime_id:
+            try:
+                url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/stop"
+                self.send_http_post(url, {}, timeout=5)
+                logger.info(f"🛑 Edge Runtime {self.runtime_id} stopped cleanly on Cloud API.")
+            except Exception as e:
+                logger.warning(f"Could not stop runtime cleanly on Cloud: {e}")
+            self.runtime_id = None
         self.plc.disconnect()
         logger.info("Edge Gateway stopped gracefully.")
 
