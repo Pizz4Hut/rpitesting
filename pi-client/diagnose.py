@@ -190,7 +190,7 @@ def run_full_diagnosis(config_path="config_plc.json"):
     plc_cfg = config.get("plc", {})
     plc_ip = plc_cfg.get("ip", "192.168.0.10")
     plc_port = plc_cfg.get("port", 102)
-    is_sim = plc_cfg.get("simulate", True)
+    is_sim = plc_cfg.get("simulate", False)
 
     if is_sim:
         print(f"{INFO_BADGE} PLC Simulation Mode: ENABLED (Internal mock data active)")

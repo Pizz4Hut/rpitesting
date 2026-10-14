@@ -227,14 +227,14 @@ class EdgeGatewayService:
         max_records = self.config.get("redundancy", {}).get("maxBufferedRecords", 50000)
         self.buffer = SQLiteBuffer(db_path=db_path, max_records=max_records)
 
-        # Initialize S7 PLC Client
+        # Initialize S7 PLC Client (Physical PLC Mode Only)
         plc_cfg = self.config.get("plc", {})
         self.plc = S7PLCClient(
-            ip=plc_cfg.get("ip", "192.168.0.10"),
+            ip=plc_cfg.get("ip", "192.168.2.2"),
             rack=plc_cfg.get("rack", 0),
             slot=plc_cfg.get("slot", 1),
             port=plc_cfg.get("port", 102),
-            simulate=plc_cfg.get("simulate", True)
+            simulate=False
         )
 
         self.last_plc_heartbeat = 0
@@ -325,6 +325,8 @@ class EdgeGatewayService:
         sys_metrics = get_system_metrics()
         net_status = self.get_network_status()
         queue_depth = self.buffer.get_queue_depth()
+        plc_connected = self.plc.is_connected()
+        plc_alert = "เชื่อมต่อตู้ PLC สำเร็จ" if plc_connected else f"⚠️ ไม่มีข้อมูลจาก PLC! กรุณาเชื่อมต่อสายสัญญาณ PLC S7-1200 ที่ IP {self.plc.ip}:{self.plc.port}"
 
         payload = {
             "deviceId": self.device_id,
@@ -335,10 +337,12 @@ class EdgeGatewayService:
             "timestamp": int(time.time() * 1000),
             "system": sys_metrics,
             "plc": {
-                "connected": self.plc.is_connected(),
+                "connected": plc_connected,
                 "ip": self.plc.ip,
-                "lifebit": 1 if self.last_lifebit_val else 0,
-                "simulated": self.plc.simulate
+                "port": self.plc.port,
+                "status": "ONLINE" if plc_connected else "DISCONNECTED_WAITING_FOR_PLC",
+                "alert": plc_alert,
+                "lifebit": 1 if self.last_lifebit_val else 0
             },
             "redundancy": {
                 "bufferQueueDepth": queue_depth,
@@ -356,7 +360,10 @@ class EdgeGatewayService:
             url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/heartbeat"
             try:
                 status_code, body = self.send_http_post(url, payload, timeout=10)
-                logger.info(f"💓 Heartbeat OK (HTTP {status_code}) | Runtime: {self.runtime_id[:8]}... | PLC: {self.plc.is_connected()} | Queue: {queue_depth}")
+                if plc_connected:
+                    logger.info(f"💓 Heartbeat OK (HTTP {status_code}) | Runtime: {self.runtime_id[:8]}... | ✅ PLC: Connected (IP {self.plc.ip}) | Queue: {queue_depth}")
+                else:
+                    logger.warning(f"💓 Heartbeat OK (HTTP {status_code}) | Runtime: {self.runtime_id[:8]}... | ⚠️ PLC: Disconnected (ไม่มีข้อมูลจาก PLC ให้เชื่อมข้อมูลจาก PLC ที่ {self.plc.ip}:{self.plc.port})")
                 return
             except urllib.error.HTTPError as e:
                 if e.code == 409:
@@ -389,6 +396,10 @@ class EdgeGatewayService:
     def transmit_telemetry(self):
         """Gathers PLC tags, system metrics, and sends to REST API. Buffers on failure."""
         tags_data = self.acquire_plc_data()
+        if not tags_data or len(tags_data) == 0:
+            logger.warning(f"⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.plc.ip}:{self.plc.port}! ให้เชื่อมต่อข้อมูลจาก PLC — ข้ามรอบส่งข้อมูล Telemetry (กำลังรอรับข้อมูลจากตู้ PLC จริง...)")
+            return
+
         sys_metrics = get_system_metrics()
         net_status = self.get_network_status()
         queue_depth = self.buffer.get_queue_depth()

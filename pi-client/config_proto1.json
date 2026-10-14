@@ -15,7 +15,7 @@
     "rack": 0,
     "slot": 1,
     "port": 102,
-    "simulate": true,
+    "simulate": false,
     "lifebit": {
       "enabled": true,
       "address": "DB1.DBX0.0",
