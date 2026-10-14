@@ -62,10 +62,20 @@ sudo systemctl enable --now plc-gateway.service
 echo "✅ Systemd service 'plc-gateway' installed, enabled, and started!"
 echo "To view live logs: sudo journalctl -u plc-gateway -f"
 
+# 6. Install CLI Toolbox Shortcuts
+if [ -f "./install_toolbox.sh" ]; then
+    chmod +x ./install_toolbox.sh
+    ./install_toolbox.sh
+fi
 
 echo "======================================================================"
-echo "🎉 Setup complete! You can now start or test the gateway:"
-echo "   Test with Mock PLC:      python3 plc_gateway.py --mock --interval 10"
-echo "   Run Burn-in Simulation:  python3 plc_simulator.py --hours 24"
-echo "   Start 24/7 Service:      sudo systemctl start plc-gateway"
+echo "🎉 Setup complete! You can now use the global CLI Toolbox from anywhere:"
+echo "   • plc-toolbox    (Show all available commands)"
+echo "   • plc-info       (Show Device ID, MACs, Serial & Tailscale IP)"
+echo "   • plc-diagnose   (Run 7-Point Self-Diagnosis Check)"
+echo "   • plc-test       (Test 1 Transmission Cycle)"
+echo "   • plc-status     (Check Service Status)"
+echo "   • plc-logs       (View Live Logs)"
+echo "   • plc-restart    (Restart Gateway Gracefully)"
+echo "   • plc-buffer     (Inspect SQLite Offline Buffer Queue)"
 echo "======================================================================"

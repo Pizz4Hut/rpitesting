@@ -239,6 +239,24 @@ sudo systemctl status plc-gateway
 sudo journalctl -u plc-gateway -f
 ```
 
+### ขั้นตอนที่ 5: ติดตั้งและใช้งาน CLI Toolbox (คำสั่งลัดประจำตู้คอนโทรล)
+ติดตั้งชุดคำสั่งลัดเพื่อให้สามารถพิมพ์เรียกใช้งานได้จากทุกโฟลเดอร์ในระบบ:
+```bash
+cd ~/edge-prototype-gen-1/pi-client
+./install_toolbox.sh
+```
+หลังจากติดตั้งแล้ว สามารถเรียกใช้งานคำสั่งต่อไปนี้ได้ทันที:
+* `plc-toolbox` : แสดงสารบัญคำสั่งลัดทั้งหมด
+* `plc-info` : ดู Hardware Profile, MAC Address, Serial และ Tailscale IP
+* `plc-diagnose` : ตรวจสุขภาพระบบอัตโนมัติ 7 จุด (PASS/WARN/FAIL)
+* `plc-test` : ทดสอบดึงค่า PLC และยิง API 1 รอบ
+* `plc-status` : เช็คสถานะ Background Service
+* `plc-logs` : ดู Live Logs การทำงานแบบ Real-time
+* `plc-restart` : รีสตาร์ท Gateway แบบปลอดภัย
+* `plc-buffer` : ตรวจสอบจำนวนข้อมูลที่ค้างใน SQLite Offline Queue
+* `plc-burnin` : รัน Burn-in Stability Test 24 ชั่วโมง
+* `plc-sim` : สตาร์ท PLC Simulator (พอร์ต 102)
+
 ---
 
 ## 7. 📡 ตัวอย่าง JSON REST API Payload

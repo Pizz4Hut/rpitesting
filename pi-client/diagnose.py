@@ -44,10 +44,16 @@ def print_header(title):
 
 
 def load_config(config_path="config_plc.json"):
-    if not os.path.exists(config_path):
-        return None
+    target_path = config_path
+    if not os.path.exists(target_path):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        fallback = os.path.join(script_dir, os.path.basename(config_path))
+        if os.path.exists(fallback):
+            target_path = fallback
+        else:
+            return None
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(target_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return None

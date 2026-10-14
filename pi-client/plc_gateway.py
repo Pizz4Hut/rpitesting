@@ -172,6 +172,21 @@ def get_interface_ip(ifname):
             return "127.0.0.1"
 
 
+def get_tailscale_ip():
+    """Reads Tailscale IP address if tailscale is installed and running."""
+    try:
+        import subprocess
+        res = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0:
+            ip = res.stdout.strip()
+            if ip:
+                return ip
+    except Exception:
+        pass
+    # Alternative check interface tailscale0
+    return get_interface_ip("tailscale0")
+
+
 class EdgeGatewayService:
     def __init__(self, config_path="config_plc.json", simulate_override=None):
         self.config_path = config_path
@@ -205,6 +220,9 @@ class EdgeGatewayService:
 
         # Initialize SQLite Store-and-Forward Buffer
         db_path = self.config.get("redundancy", {}).get("sqliteDbPath", "buffer.db")
+        if not os.path.isabs(db_path):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            db_path = os.path.join(script_dir, db_path)
         max_records = self.config.get("redundancy", {}).get("maxBufferedRecords", 50000)
         self.buffer = SQLiteBuffer(db_path=db_path, max_records=max_records)
 
@@ -224,9 +242,15 @@ class EdgeGatewayService:
         self.last_lifebit_val = False
 
     def _load_config(self):
-        if not os.path.exists(self.config_path):
-            raise FileNotFoundError(f"Configuration file {self.config_path} not found.")
-        with open(self.config_path, "r") as f:
+        target_path = self.config_path
+        if not os.path.exists(target_path):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            fallback_path = os.path.join(script_dir, os.path.basename(self.config_path))
+            if os.path.exists(fallback_path):
+                target_path = fallback_path
+            else:
+                raise FileNotFoundError(f"Configuration file {self.config_path} not found (also checked {fallback_path}).")
+        with open(target_path, "r") as f:
             return json.load(f)
 
     def send_http_post(self, url, payload, timeout=15):
@@ -513,6 +537,9 @@ def main():
         print(f"LAN 2 (Internet / API):  {net['lan2_internet']['interface']}")
         print(f"  IP Address:            {net['lan2_internet']['ip']}")
         print(f"  MAC Address:           {net['lan2_internet']['mac']}")
+        print("-" * 65)
+        print(f"Tailscale VPN IP:        {get_tailscale_ip()}")
+        print(f"SQLite Buffer Queue:     {gateway.buffer.get_queue_depth()} pending records")
         print("=" * 65 + "\n")
         return
 

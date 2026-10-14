@@ -199,6 +199,35 @@ python3 plc_gateway.py --info
 
 ---
 
+## 🧰 IoT Edge Gateway CLI Toolbox (ชุดคำสั่งลัดประจำตู้คอนโทรล)
+
+เพื่อให้วิศวกรหน้างานและผู้ดูแลระบบสามารถสั่งการได้สะดวกรวดเร็วที่สุด **โดยไม่ต้องจำชื่อโฟลเดอร์หรือพิมพ์ `cd` เข้าไปก่อน** ระบบได้ติดตั้งคำสั่งลัดระดับระบบ (Global Commands ใน `/usr/local/bin`) ไว้ให้ใช้งานได้จากทุกที่ใน Terminal ทันที:
+
+### ⚙️ คำสั่งติดตั้งชุด Toolbox (รันครั้งเดียว):
+```bash
+cd ~/edge-prototype-gen-1/pi-client
+./install_toolbox.sh
+```
+
+### 📋 สรุปรายการคำสั่ง Toolbox ที่ใช้งานได้ทันทีจากทุกโฟลเดอร์:
+
+| คำสั่งลัด | ความสามารถและหน้าที่ | คำสั่งเดิมที่เทียบเท่า |
+| :--- | :--- | :--- |
+| **`plc-toolbox`** | 🧰 **เปิดสารบัญคำสั่งลัดทั้งหมด:** ดู Cheat Sheet คำสั่งทั้งหมดในหน้าเดียว | เมนูช่วยเหลือ |
+| **`plc-info`** | 🏷️ **แสดง Hardware Profile:** MAC Address, Serial, IP วงใน, Tailscale VPN | `python3 plc_gateway.py --info` |
+| **`plc-diagnose`** | 🩺 **รันระบบตรวจสุขภาพ 7 จุด (Self-Diagnosis):** สรุปสถานะเขียว/เหลือง/แดง | `python3 plc_gateway.py --diagnose` |
+| **`plc-test`** | 🚀 **ทดสอบดึงค่าและส่งขึ้น API (1 รอบ):** อ่าน PLC และยิง Cloud ทันที | `python3 plc_gateway.py --once` |
+| **`plc-status`** | 🟢 **เช็คสถานะ Service 24/7:** ดูว่า Gateway กำลัง Active หรือไม่ | `sudo systemctl status plc-gateway` |
+| **`plc-logs`** | 📜 **ดู Live Stream Logs:** มอนิเตอร์รอบส่ง Heartbeat และการอ่าน PLC สดๆ | `sudo journalctl -u plc-gateway -f` |
+| **`plc-restart`** | 🔄 **รีสตาร์ท Gateway ทันที:** ปิดและเปิดระบบใหม่แบบนุ่มนวล | `sudo systemctl restart plc-gateway` |
+| **`plc-start`** | ▶️ **สั่งเริ่มทำงาน Gateway Service:** เปิดการทำงานระดับ Systemd | `sudo systemctl start plc-gateway` |
+| **`plc-stop`** | ⏹️ **สั่งหยุดการทำงาน Gateway Service:** หยุด Service ชั่วคราว | `sudo systemctl stop plc-gateway` |
+| **`plc-buffer`** | 📦 **เช็คคิว SQLite Offline Buffer:** ดูจำนวนข้อมูลที่ค้างส่งและ PNR ล่าสุด | Query SQLite WAL |
+| **`plc-burnin`** | 🔥 **รัน Burn-in Stability Test 24 ชม.:** ทดสอบความเสถียรตาม TOR 2.3 | `python3 plc_simulator.py` |
+| **`plc-sim`** | 🏭 **สตาร์ทตัวจำลอง Siemens S7-1200 PLC:** รันเซิร์ฟเวอร์ Port 102 บนบอร์ด 3 | `sudo python3 s7_server_simulator.py` |
+
+---
+
 ## 🔍 การตรวจสอบสถานะและแก้ไขปัญหา (Troubleshooting & Verification)
 
 ### 1. วิธีเช็คสถานะ Heartbeat แบบ Real-time บนบอร์ด Pi:
