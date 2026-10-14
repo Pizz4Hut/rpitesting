@@ -238,7 +238,7 @@ nohup python3 plc_simulator.py --hours 24 --interval 10 --log burnin_24h.log > b
 tail -f burnin_24h.log
 ```
 
-## 🌐 การติดตั้ง Tailscale VPN สำหรับรีโมทควบคุมระยะไกล (Remote Access & Tailscale SSH)
+## 🌐 การติดตั้ง Tailscale VPN สำหรับรีโมทควบคุมระยะไกล (Remote Setup & Maintenance)
 
 เพื่อความสะดวกและปลอดภัยในการ SSH เข้าควบคุมบอร์ด Raspberry Pi จากที่ใดก็ได้ในโลก (ไม่ต้องเปิดพอร์ตหรือทำ Port Forwarding):
 
@@ -254,10 +254,40 @@ sudo tailscale up --ssh
 tailscale ip -4
 tailscale status
 ```
-* **การใช้งาน:** เครื่อง Mac หรืออุปกรณ์ที่ติดตั้ง Tailscale ไว้ในบัญชีเดียวกัน สามารถ SSH เข้าหาบอร์ดตรงๆ ได้ทันที:
+
+### 💻 คำสั่งสั่งการและดูแลรักษาระยะไกล (Remote Operations from Mac):
+* **SSH เข้า Terminal ข้ามโลก:**
   ```bash
   ssh groundshift_supreme_admin@gse-proto-1
+  ssh groundshift_supreme_admin@gse-proto-2
   ```
+* **อัปเดตโค้ดและ Restart Service ทางไกล (1 บรรทัดจบ):**
+  ```bash
+  ssh groundshift_supreme_admin@gse-proto-1 "cd ~/edge-prototype-gen-1/pi-client && git pull && sudo systemctl restart plc-gateway"
+  ```
+* **รันตรวจเช็คสุขภาพระบบ (Self-Diagnosis) จากระยะไกล:**
+  ```bash
+  ssh groundshift_supreme_admin@gse-proto-1 "python3 ~/edge-prototype-gen-1/pi-client/plc_gateway.py --diagnose"
+  ```
+* **สตรีมดู Live Log ของตู้โรงงานแบบสดๆ บนจอคอมของคุณ:**
+  ```bash
+  ssh groundshift_supreme_admin@gse-proto-1 "sudo journalctl -u plc-gateway -f"
+  ```
+* **คัดลอกไฟล์คอนฟิกจากเครื่อง Mac ขึ้นไปทับบนบอร์ด Pi:**
+  ```bash
+  scp config_plc.json groundshift_supreme_admin@gse-proto-1:~/edge-prototype-gen-1/pi-client/
+  ```
+
+### 🌟 การเปิด Tailscale Subnet Router (เจาะทะลุไปถึงตู้ PLC Siemens หน้างาน):
+หากต้องการให้โปรแกรม **Siemens TIA Portal บนคอมพิวเตอร์ของคุณ สามารถมองเห็นและโปรแกรม PLC S7-1200 (`192.168.2.2`) ที่ตั้งอยู่หน้างานโรงงานได้จากระยะไกล**:
+1. บนบอร์ด Raspberry Pi ให้รันคำสั่งเปิดเป็น Subnet Router:
+   ```bash
+   sudo tailscale up --advertise-routes=192.168.2.0/24
+   ```
+2. บนหน้าเว็บ [login.tailscale.com/admin/machines](https://login.tailscale.com/admin/machines):
+   * คลิกปุ่ม `...` ที่ชื่อเครื่อง `gse-proto-1` &rarr; เลือก **Edit route settings**
+   * ติ๊กถูกที่ช่อง **☑ `192.168.2.0/24`** &rarr; กด **Save**
+3. เครื่องคอมพิวเตอร์ของคุณจะสามารถ Ping หรือเปิด TIA Portal ยิงตรงไปที่ IP `192.168.2.2:102` ของ PLC เสมือนนั่งอยู่หน้าตู้โรงงานทันที!
 
 ---
 
