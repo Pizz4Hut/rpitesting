@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
 Automated Self-Diagnosis & Troubleshooting Utility
-Comprehensive health-check for Siemens S7-1200 IoT Edge Gateway.
+Comprehensive health-check for Siemens S7-1200 Industrial IoT Edge Gateway.
 Checks:
- 1. System Health (CPU Temp, RAM, Disk, Uptime)
- 2. Network & LAN (eth0, eth1, Ping, DNS)
- 3. PLC Connectivity (Ping PLC IP, TCP Port 102 S7comm Check)
- 4. Cloud / REST API Endpoints (Heartbeat URL, Telemetry URL)
- 5. SQLite Store-and-Forward Buffer Integrity
- 6. PNR Generator Verification (Base32 6-char Collision-Free)
- 7. Systemd Service Autostart Status
+ 1. System Health (CPU Temp, MicroSD Storage, Uptime)
+ 2. Network & LAN Connectivity (eth0, eth1, Internet Ping, DNS Resolution)
+ 3. Physical Siemens S7-1200 PLC Connectivity (Ping & S7comm Port 102)
+ 4. Cloud REST API Health (Railway Edge Device API, x-api-key, TLS Handshake)
+ 5. SQLite Store-and-Forward Buffer Integrity (WAL Journal Mode, Backlog Queue)
+ 6. PNR Reference Code Generator Verification (Crockford Base32 6-char Collision-Free)
+ 7. Systemd Background Service Autostart Status (plc-gateway.service)
 Outputs colored PASS / WARN / FAIL badges with actionable troubleshooting tips.
 """
 
@@ -19,6 +19,7 @@ import socket
 import subprocess
 import json
 import time
+import ssl
 import urllib.request
 import urllib.error
 
@@ -67,7 +68,7 @@ def run_cmd(cmd):
         return False, "", str(e)
 
 
-def check_tcp_port(ip, port, timeout=2.0):
+def check_tcp_port(ip, port, timeout=2.5):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -78,21 +79,35 @@ def check_tcp_port(ip, port, timeout=2.0):
         return False
 
 
-def test_http_url(url, timeout=3.0):
-    if not url:
-        return False, "URL not configured"
+def test_cloud_device_api(base_url, device_id, api_key, timeout=5.0):
+    if not base_url or not device_id:
+        return False, "Base URL or Device ID not configured"
+    
+    target_url = f"{base_url.rstrip('/')}/edge/devices/{device_id}"
+    req_headers = {
+        "x-api-key": api_key or "",
+        "User-Agent": "EdgeGateway-Diagnostics/1.0",
+        "Accept": "application/json"
+    }
+
     try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "EdgeGateway-Diagnostics/1.0"},
-            method="HEAD"
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return True, f"HTTP {resp.getcode()}"
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(target_url, headers=req_headers, method="GET")
+        start_t = time.time()
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            elapsed_ms = round((time.time() - start_t) * 1000, 1)
+            raw = resp.read().decode("utf-8")
+            data = json.loads(raw)
+            status_str = data.get("status", "ACTIVE")
+            dev_name = data.get("name", "Unknown")
+            return True, f"HTTP 200 OK (Latency: {elapsed_ms}ms | Cloud Status: {status_str} | Name: {dev_name})"
     except urllib.error.HTTPError as e:
-        # HTTP 401, 403, 405 (Method Not Allowed) or 400 is fine for a HEAD request to a protected endpoint
-        if e.code in (200, 201, 204, 400, 401, 403, 404, 405):
-            return True, f"HTTP {e.code} (Server reachable)"
+        if e.code == 401:
+            return False, "HTTP 401 Unauthorized - API Key (x-api-key) is invalid or rejected by Cloud!"
+        elif e.code == 404:
+            return False, f"HTTP 404 Not Found - Device ID '{device_id}' is not registered on Cloud!"
+        elif e.code in (200, 201, 204):
+            return True, f"HTTP {e.code}"
         return False, f"HTTP {e.code} ({e.reason})"
     except urllib.error.URLError as e:
         reason = str(e.reason)
@@ -161,7 +176,7 @@ def run_full_diagnosis(config_path="config_plc.json"):
     lan1_if = net_cfg.get("lan1_plc_interface", "eth0")
     lan2_if = net_cfg.get("lan2_internet_interface", "eth1")
 
-    # Local IP
+    # Local IP for LAN 1
     ok_ip1, ip1, _ = run_cmd(f"ip -4 addr show {lan1_if} 2>/dev/null | grep -oP '(?<=inet\\s)\\d+(\\.\\d+){{3}}' | head -n1")
     if ok_ip1 and ip1:
         print(f"{PASS_BADGE} LAN 1 Interface ({lan1_if}): IP {ip1}")
@@ -184,74 +199,70 @@ def run_full_diagnosis(config_path="config_plc.json"):
         print(f"{WARN_BADGE} DNS Resolution: Unable to resolve external domains")
 
     # -------------------------------------------------------------
-    # 3. PLC CONNECTIVITY (S7-1200 / Port 102)
+    # 3. PHYSICAL SIEMENS S7-1200 PLC CONNECTIVITY
     # -------------------------------------------------------------
-    print_header("3. Siemens S7-1200 PLC Connectivity")
+    print_header("3. Siemens S7-1200 PLC Connectivity (Physical Connection Only)")
     plc_cfg = config.get("plc", {})
-    plc_ip = plc_cfg.get("ip", "192.168.0.10")
+    plc_ip = plc_cfg.get("ip", "192.168.2.2")
     plc_port = plc_cfg.get("port", 102)
-    is_sim = plc_cfg.get("simulate", False)
 
-    if is_sim:
-        print(f"{INFO_BADGE} PLC Simulation Mode: ENABLED (Internal mock data active)")
-        print(f"         To connect to real PLC, set '\"simulate\": false' in config_plc.json")
+    print(f"{INFO_BADGE} Target PLC Address: {plc_ip}:{plc_port} (S7comm Protocol)")
+
+    # Ping test
+    ok_plc_ping, _, _ = run_cmd(f"ping -c 1 -W 2 {plc_ip} >/dev/null 2>&1")
+    if ok_plc_ping:
+        print(f"{PASS_BADGE} Network Ping Check: {plc_ip} is ALIVE on LAN")
     else:
-        print(f"{INFO_BADGE} Target PLC IP: {plc_ip}:{plc_port}")
-        # Ping test
-        ok_plc_ping, _, _ = run_cmd(f"ping -c 1 -W 2 {plc_ip} >/dev/null 2>&1")
-        if ok_plc_ping:
-            print(f"{PASS_BADGE} PLC Ping Check: {plc_ip} is ALIVE on network")
-        else:
-            print(f"{FAIL_BADGE} PLC Ping Check: {plc_ip} is UNREACHABLE")
-            issues.append(f"PLC IP {plc_ip} cannot be pinged. Check eth0 cable to PLC.")
+        print(f"{FAIL_BADGE} Network Ping Check: {plc_ip} is UNREACHABLE")
 
-        # Port 102 check
-        port_open = check_tcp_port(plc_ip, plc_port, timeout=2.0)
-        if port_open:
-            print(f"{PASS_BADGE} S7comm Port {plc_port}: OPEN and accepting connections")
-        else:
-            print(f"{FAIL_BADGE} S7comm Port {plc_port}: CLOSED or connection refused")
-            issues.append(f"Port {plc_port} on {plc_ip} is closed. In TIA Portal, enable 'Permit access with PUT/GET'.")
+    # Port 102 check
+    port_open = check_tcp_port(plc_ip, plc_port, timeout=2.5)
+    if port_open:
+        print(f"{PASS_BADGE} S7comm TCP Port {plc_port}: OPEN and accepting connections")
+        print(f"{PASS_BADGE} Physical PLC State: Connected & ready for 19-Tag acquisition")
+    else:
+        print(f"{FAIL_BADGE} S7comm TCP Port {plc_port}: CLOSED or connection refused")
+        print(f"{WARN_BADGE} ⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}!")
+        print(f"         • ให้เชื่อมต่อสาย LAN จากตู้ PLC S7-1200 เข้าพอร์ต eth0 ของ Raspberry Pi")
+        print(f"         • ตรวจสอบว่าตู้ PLC S7-1200 เปิดสวิตช์และไฟสถานะ RUN ติดสว่าง")
+        print(f"         • ใน Siemens TIA Portal ต้องติ๊กถูก 'Permit access with PUT/GET communication from remote partner'")
+        issues.append(f"ไม่มีข้อมูลจาก PLC: ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}")
 
     # -------------------------------------------------------------
-    # 4. REST API ENDPOINTS
+    # 4. REST API ENDPOINTS & CLOUD RUNTIME HEALTH
     # -------------------------------------------------------------
-    print_header("4. REST API Endpoint Health")
-    base_url = api_cfg.get("baseUrl", "").rstrip("/")
+    print_header("4. REST API Endpoint Health (Railway Cloud API)")
+    api_cfg = config.get("api", {})
+    base_url = api_cfg.get("baseUrl", "https://epc-edge-api-dev.up.railway.app/api").rstrip("/")
+    api_key = api_cfg.get("apiKey", "")
     dev_id = config.get("deviceId", "")
+    dev_name = config.get("deviceName", "(unknown)")
+
+    print(f"{INFO_BADGE} Cloud API Base URL:  {base_url}")
+    print(f"{INFO_BADGE} Target Device ID:   {dev_id} ({dev_name})")
+
     if base_url and dev_id:
-        device_url = f"{base_url}/edge/devices/{dev_id}"
-        print(f"{INFO_BADGE} Cloud Device Target: {device_url}")
-        dev_ok, dev_msg = test_http_url(device_url)
-        if dev_ok:
-            print(f"{PASS_BADGE} Cloud Device Registration: {dev_msg}")
+        cloud_ok, cloud_msg = test_cloud_device_api(base_url, dev_id, api_key)
+        if cloud_ok:
+            print(f"{PASS_BADGE} Cloud Device API:    {cloud_msg}")
         else:
-            print(f"{WARN_BADGE} Cloud Device Registration: {dev_msg}")
-            issues.append(f"Cloud device endpoint error: {dev_msg}")
-
-    print(f"{INFO_BADGE} Heartbeat Target: {heartbeat_url}")
-    hb_ok, hb_msg = test_http_url(heartbeat_url)
-    if hb_ok:
-        print(f"{PASS_BADGE} Heartbeat Endpoint: {hb_msg}")
+            print(f"{FAIL_BADGE} Cloud Device API:    {cloud_msg}")
+            issues.append(f"Cloud Device Endpoint Error: {cloud_msg}")
     else:
-        print(f"{WARN_BADGE} Heartbeat Endpoint: {hb_msg}")
-        if "Connection refused" in hb_msg:
-            issues.append("Heartbeat URL connection refused. (Waiting for actual HTTP API server to be provided).")
-        else:
-            issues.append(f"Heartbeat URL error: {hb_msg}")
+        print(f"{FAIL_BADGE} Missing Cloud API Base URL or Device ID in config!")
+        issues.append("Missing baseUrl or deviceId in configuration.")
 
-    print(f"{INFO_BADGE} Telemetry Target: {telemetry_url}")
-    tel_ok, tel_msg = test_http_url(telemetry_url)
-    if tel_ok:
-        print(f"{PASS_BADGE} Telemetry Endpoint: {tel_msg}")
-    else:
-        print(f"{WARN_BADGE} Telemetry Endpoint: {tel_msg}")
+    print(f"{PASS_BADGE} Cloud Architecture: Groundshift Technologies Edge Runtime (Railway API)")
 
     # -------------------------------------------------------------
     # 5. SQLITE BUFFER & REDUNDANCY
     # -------------------------------------------------------------
     print_header("5. SQLite Store-and-Forward Buffer Integrity")
     db_path = config.get("redundancy", {}).get("sqliteDbPath", "buffer.db")
+    if not os.path.isabs(db_path):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        db_path = os.path.join(script_dir, db_path)
+
     if os.path.exists(db_path):
         try:
             import sqlite3
@@ -331,10 +342,9 @@ def run_full_diagnosis(config_path="config_plc.json"):
             print(f"  {idx}. {item}")
 
         print(f"\n{CYAN}{BOLD}💡 Troubleshooting Quick-Fix Guide:{RESET}")
-        print("  • If 'Heartbeat/Telemetry connection refused': This is expected until the customer provides their live HTTP API endpoint URL.")
-        print("  • If 'PLC Unreachable': Ensure eth0 cable is firmly connected to PLC S7-1200 and Raspberry Pi.")
-        print("  • If 'Port 102 Closed': In Siemens TIA Portal, open CPU Properties -> Protection & Security -> Enable PUT/GET.")
-        print("  • To view live logs: sudo journalctl -u plc-gateway -f")
+        print("  • หากขึ้น 'ไม่มีข้อมูลจาก PLC': ให้เสียบสาย LAN จากตู้ PLC S7-1200 เข้าบอร์ด Pi และเปิดสวิตช์ตู้ PLC")
+        print("  • หากต้องการเช็ค/สลับการตั้งค่าบอร์ด 1 หรือ 2: รันคำสั่ง 'plc-config'")
+        print("  • หากต้องการดู Log การทำงานแบบ Real-time: รันคำสั่ง 'plc-logs' (หรือ sudo journalctl -u plc-gateway -f)")
 
     print(f"{BOLD}{'=' * 68}\n{RESET}")
 

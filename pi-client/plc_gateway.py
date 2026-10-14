@@ -581,7 +581,6 @@ class EdgeGatewayService:
 def main():
     parser = argparse.ArgumentParser(description="Raspberry Pi 4 IoT Edge Gateway for Siemens S7-1200")
     parser.add_argument("--config", default="config_plc.json", help="Path to config_plc.json")
-    parser.add_argument("--mock", action="store_true", help="Force Simulation mode (no physical PLC required)")
     parser.add_argument("--interval", type=int, default=None, help="Override transmission interval in seconds")
     parser.add_argument("--once", action="store_true", help="Run a single acquisition and transmit cycle, then exit")
     parser.add_argument("--info", action="store_true", help="Display Device ID, Serial Number, MAC addresses, and exit")
@@ -595,8 +594,7 @@ def main():
         return
 
     gateway = EdgeGatewayService(
-        config_path=args.config,
-        simulate_override=True if args.mock else None
+        config_path=args.config
     )
 
     if args.info:
