@@ -16,6 +16,17 @@ echo "🧰 Installing Raspberry Pi IoT Edge Gateway CLI Toolbox"
 echo "   Target Directory: ${SCRIPT_DIR}"
 echo "======================================================================"
 
+# 0. gateway: Interactive All-in-One Management Hub & Zero-Touch Installer
+PARENT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [ -f "${PARENT_DIR}/gateway.sh" ]; then
+    sudo tee /usr/local/bin/gateway > /dev/null <<EOF
+#!/usr/bin/env bash
+bash "${PARENT_DIR}/gateway.sh" "\$@"
+EOF
+    sudo chmod +x /usr/local/bin/gateway
+    echo "  [✓] /usr/local/bin/gateway        -> All-in-One Interactive Terminal Hub"
+fi
+
 # 1. plc-info: Display Hardware Profile, MAC Addresses, Serial Number & Tailscale
 sudo tee /usr/local/bin/plc-info > /dev/null <<EOF
 #!/usr/bin/env bash
@@ -208,6 +219,7 @@ sudo tee /usr/local/bin/plc-toolbox > /dev/null <<EOF
 echo "======================================================================"
 echo "🍓 Raspberry Pi IoT Edge Gateway — CLI Toolbox Menu"
 echo "======================================================================"
+echo "  gateway        : 🚀 All-in-One Interactive Terminal Hub & Zero-Touch Installer"
 echo "  plc-config     : Set Device Name, UUID, API Key, HTTPS URL, or start Web Portal"
 echo "  plc-discover   : Auto-scan local networks to find & discover Siemens S7 PLCs"
 echo "  plc-package    : Inspect Raw Data Hex -> Parsed Sensors & Web Batch Package"

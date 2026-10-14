@@ -316,10 +316,23 @@ cd ~/edge-prototype-gen-1/pi-client
 ./install_toolbox.sh
 ```
 
+### 🚀 เริ่มต้นใช้งานด่วนด้วย All-in-One Management Console (ปุ่มเดียวจบ):
+```bash
+# เมื่อ SSH เข้าสู่เครื่อง Raspberry Pi เพียงรัน:
+sudo ./gateway.sh
+
+# หรือเรียกใช้งานผ่าน Global Command จากทุกโฟลเดอร์:
+gateway
+```
+*ระบบจะเปิดเมนูอินเตอร์แอคทีฟ ให้กดเลือกโหมด **[1] 1-Click Zero-Touch Install** หรือเลือกปรับแต่งตามต้องการได้ทันที*
+
+---
+
 ### 📋 สรุปรายการคำสั่ง Toolbox ที่ใช้งานได้ทันทีจากทุกโฟลเดอร์:
 
 | คำสั่งลัด | ความสามารถและหน้าที่ | คำสั่งเดิมที่เทียบเท่า |
 | :--- | :--- | :--- |
+| **`gateway`** | 🚀 **ศูนย์รวมการจัดการและติดตั้งอัตโนมัติ (All-in-One Console):** หน้าจอเมนูหลัก Zero-Touch Install, Auto-Discover, ตั้งค่า, ตรวจสุขภาพ และจัดการ Service | `sudo ./gateway.sh` |
 | **`plc-config`** | ⚙️ **ตั้งค่าระบบและทดสอบ HTTPS Cloud:** ตั้งชื่ออุปกรณ์, Device ID, API Key, PLC IP, หรือเปิด Web Configurator | `python3 config_tool.py` |
 | **`plc-discover`**| 🔍 **สแกนหาตู้ Siemens PLC อัตโนมัติ:** ค้นหาตู้ Siemens S7-1200 ทั่วทุก Subnet ท้องถิ่นอัตโนมัติ | `python3 plc_gateway.py --discover` |
 | **`plc-package`** | 📦 **ตรวจสอบการแปลง Raw Data & Web Batch:** ดูตาราง Hex ➔ Value และทดสอบยิง Cloud API | `python3 plc_gateway.py --package` |

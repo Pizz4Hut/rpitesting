@@ -250,6 +250,7 @@ git stash
 git pull origin main
 ./install_toolbox.sh
 ```
+* `gateway` : 🚀 **ศูนย์ควบคุม All-in-One Interactive Terminal Hub & 1-Click Zero-Touch Installer**
 * `plc-config` : ⚙️ เมนูตั้งชื่อเครื่อง (Device Name), รหัส UUID, API Key, HTTPS URL และเปิด Web Configurator
 * `plc-toolbox` : แสดงสารบัญคำสั่งลัดทั้งหมด
 * `plc-runtime` : ดูสถานะ Cloud Runtime สดๆ และ Last Seen At จาก Railway API
