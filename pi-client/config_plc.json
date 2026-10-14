@@ -4,16 +4,16 @@
   "serialNumber": "auto",
   "repository": "https://github.com/Pizz4Hut/edge-prototype-gen-1.git",
   "api": {
-    "telemetryUrl": "http://localhost:8888/api/telemetry",
-    "batchTelemetryUrl": "http://localhost:8888/api/telemetry/batch",
-    "heartbeatUrl": "http://localhost:8888/api/heartbeat",
+    "telemetryUrl": "https://rpi11232.netlify.app/api/telemetry",
+    "batchTelemetryUrl": "https://rpi11232.netlify.app/api/telemetry/batch",
+    "heartbeatUrl": "https://rpi11232.netlify.app/api/heartbeat",
     "apiKey": "",
     "transmissionIntervalSec": 3600,
     "heartbeatIntervalSec": 30,
     "httpTimeoutSec": 15
   },
   "plc": {
-    "ip": "192.168.0.10",
+    "ip": "192.168.2.2",
     "rack": 0,
     "slot": 1,
     "port": 102,
