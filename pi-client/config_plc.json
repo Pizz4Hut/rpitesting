@@ -15,6 +15,7 @@
     "rack": 0,
     "slot": 1,
     "port": 102,
+    "autoDiscover": true,
     "simulate": false,
     "lifebit": {
       "enabled": true,

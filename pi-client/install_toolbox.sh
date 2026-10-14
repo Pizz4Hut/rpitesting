@@ -194,13 +194,22 @@ EOF
 sudo chmod +x /usr/local/bin/plc-package
 echo "  [✓] /usr/local/bin/plc-package   -> Inspect Raw Data Hex & Web Batch Package"
 
-# 15. plc-toolbox: Summary of all commands
+# 15. plc-discover: Auto-scan and discover Siemens S7-1200 PLCs on local network
+sudo tee /usr/local/bin/plc-discover > /dev/null <<EOF
+#!/usr/bin/env bash
+python3 "${SCRIPT_DIR}/plc_gateway.py" --config "${CONFIG_FILE}" --discover "\$@"
+EOF
+sudo chmod +x /usr/local/bin/plc-discover
+echo "  [✓] /usr/local/bin/plc-discover  -> Auto-scan & Discover Siemens S7 PLCs"
+
+# 16. plc-toolbox: Summary of all commands
 sudo tee /usr/local/bin/plc-toolbox > /dev/null <<EOF
 #!/usr/bin/env bash
 echo "======================================================================"
 echo "🍓 Raspberry Pi IoT Edge Gateway — CLI Toolbox Menu"
 echo "======================================================================"
 echo "  plc-config     : Set Device Name, UUID, API Key, HTTPS URL, or start Web Portal"
+echo "  plc-discover   : Auto-scan local networks to find & discover Siemens S7 PLCs"
 echo "  plc-package    : Inspect Raw Data Hex -> Parsed Sensors & Web Batch Package"
 echo "  plc-info       : Show Device ID, Serial Number, MAC addresses & VPN IP"
 echo "  plc-diagnose   : Run 7-Point automated self-diagnostic health check"

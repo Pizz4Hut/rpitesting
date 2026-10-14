@@ -10,6 +10,8 @@ import time
 import struct
 import logging
 import re
+import socket
+import concurrent.futures
 
 logger = logging.getLogger("PLCDriver")
 
@@ -125,12 +127,141 @@ def format_sensor_reading(tag_config, raw_bytes, parsed_address=None):
 
 
 
+def probe_s7_plc(ip, port=102, timeout=0.25):
+    """
+    Actively probes target IP on Port 102 using ISO-on-TCP (COTP) Connection Request packet.
+    If the remote device is a Siemens S7 PLC, it responds with a COTP Connection Confirm packet (0x03 0x00 ... 0xD0).
+    Returns (is_plc, latency_ms, details).
+    """
+    cotp_cr = bytes([
+        0x03, 0x00, 0x00, 0x16,  # TPKT Header (Version 3, length 22)
+        0x11,                    # COTP Length 17
+        0xe0,                    # COTP CR PDU type
+        0x00, 0x00,              # Destination reference
+        0x00, 0x01,              # Source reference
+        0x00,                    # Class 0
+        0xc1, 0x02, 0x01, 0x00,  # Calling TSAP
+        0xc2, 0x02, 0x01, 0x02,  # Called TSAP (Rack 0, Slot 1)
+        0xc0, 0x01, 0x0a         # TPDU size 1024
+    ])
+
+    start_time = time.time()
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((ip, port))
+        s.sendall(cotp_cr)
+        resp = s.recv(1024)
+        latency_ms = round((time.time() - start_time) * 1000, 1)
+        s.close()
+
+        if len(resp) >= 6 and resp[0] == 0x03 and resp[1] == 0x00 and resp[5] == 0xd0:
+            return True, latency_ms, "Siemens S7 PLC (COTP Verified)"
+        elif len(resp) >= 4 and resp[0] == 0x03 and resp[1] == 0x00:
+            return True, latency_ms, "Siemens S7comm Compatible Device"
+        else:
+            return True, latency_ms, "Port 102 Open (ISO-TSAP)"
+    except (socket.timeout, ConnectionRefusedError, OSError):
+        return False, 0.0, None
+
+
+def get_discovery_subnets(extra_subnets=None):
+    """
+    Collects candidate subnets from local network interfaces + standard industrial subnets.
+    """
+    subnets = set()
+    # Standard Siemens PLC subnets
+    subnets.add("192.168.2")
+    subnets.add("192.168.0")
+    subnets.add("192.168.1")
+
+    # Local active socket interface
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        parts = local_ip.split(".")
+        if len(parts) == 4 and not parts[0].startswith("127"):
+            subnets.add(f"{parts[0]}.{parts[1]}.{parts[2]}")
+    except Exception:
+        pass
+
+    # Read from hostname -I on Linux
+    try:
+        import subprocess
+        out = subprocess.run(["hostname", "-I"], capture_output=True, text=True, timeout=1)
+        if out.returncode == 0:
+            for ip in out.stdout.split():
+                parts = ip.strip().split(".")
+                if len(parts) == 4 and not parts[0].startswith("127"):
+                    subnets.add(f"{parts[0]}.{parts[1]}.{parts[2]}")
+    except Exception:
+        pass
+
+    if extra_subnets:
+        for s in extra_subnets:
+            subnets.add(s.strip())
+
+    return list(subnets)
+
+
+def discover_s7_plcs(target_subnets=None, port=102, timeout=0.25, max_workers=64):
+    """
+    Scans local networks concurrently for Siemens S7 PLCs on TCP Port 102.
+    Returns list of discovered PLCs: [{"ip": ..., "port": ..., "latency_ms": ..., "details": ...}].
+    """
+    subnets = target_subnets or get_discovery_subnets()
+    priority_ips = [
+        "192.168.2.2",   # Primary physical target in project
+        "192.168.0.1",   # Siemens factory default IP
+        "192.168.0.2",
+        "192.168.0.10",
+        "192.168.1.1",
+        "192.168.1.2",
+        "192.168.1.10",
+        "192.168.2.1",
+        "192.168.2.10"
+    ]
+
+    all_ips = []
+    for ip in priority_ips:
+        if ip not in all_ips:
+            all_ips.append(ip)
+
+    for sn in subnets:
+        for host in range(1, 255):
+            candidate = f"{sn}.{host}"
+            if candidate not in all_ips:
+                all_ips.append(candidate)
+
+    discovered = []
+
+    def _worker(candidate_ip):
+        ok, lat, desc = probe_s7_plc(candidate_ip, port=port, timeout=timeout)
+        if ok:
+            return {"ip": candidate_ip, "port": port, "latency_ms": lat, "details": desc}
+        return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_worker, ip): ip for ip in all_ips}
+        for future in concurrent.futures.as_completed(futures):
+            res = future.result()
+            if res:
+                discovered.append(res)
+
+    discovered.sort(key=lambda x: x["latency_ms"])
+    return discovered
+
+
 class S7PLCClient:
-    def __init__(self, ip="192.168.0.10", rack=0, slot=1, port=102, simulate=False):
+    def __init__(self, ip="192.168.2.2", rack=0, slot=1, port=102, auto_discover=True, simulate=False):
+        self.configured_ip = ip
         self.ip = ip
         self.rack = rack
         self.slot = slot
-        self.port = port
+        self.port = port or 102
+        self.auto_discover = auto_discover
         self.simulate = False  # Simulation completely disabled
         self.client = None
         self.connected = False
@@ -140,11 +271,28 @@ class S7PLCClient:
             logger.error("❌ ไม่พบไลบรารี python-snap7 ในระบบ! กรุณาติดตั้ง snap7 เพื่อเชื่อมต่อตู้ PLC จริง")
 
     def connect(self):
-        """Establishes connection to physical Siemens S7-1200 PLC."""
+        """Establishes connection to physical Siemens S7-1200 PLC with Auto-Discovery support."""
         if not HAS_SNAP7:
             self.connected = False
             return False
 
+        is_auto_mode = str(self.ip).strip().lower() in ("auto", "detect", "discover", "scan", "")
+
+        # 1. If in auto mode, scan network to find PLC automatically
+        if is_auto_mode:
+            logger.info("🔍 [Auto-Discovery] กำลังสแกนหาตู้ Siemens S7 PLC บนเครือข่ายอัตโนมัติ...")
+            found_plcs = discover_s7_plcs()
+            if found_plcs:
+                best = found_plcs[0]
+                self.ip = best["ip"]
+                self.port = best["port"]
+                logger.info(f"✨ [Auto-Discovery] ตรวจพบตู้ Siemens S7 PLC อัตโนมัติที่ IP {self.ip}:{self.port} (Latency: {best['latency_ms']}ms, {best['details']})!")
+            else:
+                logger.warning("⚠️ [Auto-Discovery] ไม่พบตู้ Siemens S7 PLC บนเครือข่าย! กรุณาตรวจสอบสาย LAN หรือเปิดตู้ PLC")
+                self.connected = False
+                return False
+
+        # 2. Try direct connection to self.ip
         try:
             if not self.client:
                 self.client = snap7.client.Client()
@@ -153,13 +301,33 @@ class S7PLCClient:
             self.connected = self.client.get_connected()
             if self.connected:
                 logger.info(f"✅ เชื่อมต่อตู้ PLC S7-1200 สำเร็จที่ {self.ip}:{self.port} (Rack: {self.rack}, Slot: {self.slot})")
-            else:
-                logger.warning(f"⚠️ [ไม่พบการเชื่อมต่อ PLC] ไม่สามารถติดต่อตู้ PLC S7-1200 ที่ {self.ip}:{self.port} ได้ กรุณาตรวจสอบสาย LAN หรือเปิดตู้ PLC")
-            return self.connected
-        except Exception as e:
+                return True
+        except Exception:
             self.connected = False
-            logger.warning(f"⚠️ [ไม่พบการเชื่อมต่อ PLC] ไม่สามารถเชื่อมต่อกับตู้ PLC S7-1200 ที่ {self.ip}:{self.port} ({e}) กรุณาตรวจสอบสายสัญญาณ")
-            return False
+
+        # 3. If failed and auto_discover is enabled, search for online S7 PLC on network
+        if not self.connected and self.auto_discover:
+            logger.info(f"🔄 ไม่สามารถติดต่อ IP เดิม ({self.ip}:{self.port}) ได้ — กำลังสแกนหาตู้ PLC Siemens บนวง LAN อัตโนมัติ...")
+            found_plcs = discover_s7_plcs()
+            alternate_plcs = [p for p in found_plcs if p["ip"] != self.ip]
+            if alternate_plcs:
+                best = alternate_plcs[0]
+                old_ip = self.ip
+                self.ip = best["ip"]
+                self.port = best["port"]
+                logger.info(f"✨ [Auto-Discovery] ตรวจพบตู้ PLC Siemens อัตโนมัติที่ {self.ip}:{self.port} (Latency: {best['latency_ms']}ms)! สลับการเชื่อมต่อไปยัง IP นี้ทันที...")
+                try:
+                    self.client.connect(self.ip, self.rack, self.slot, self.port)
+                    self.connected = self.client.get_connected()
+                    if self.connected:
+                        logger.info(f"✅ เชื่อมต่อตู้ PLC สำเร็จผ่าน Auto-Discovery ที่ {self.ip}:{self.port} (สลับอัตโนมัติจาก {old_ip})")
+                        return True
+                except Exception as ex:
+                    logger.warning(f"⚠️ พยายามเชื่อมต่อ PLC ที่ตรวจพบอัตโนมัติ {self.ip} ไม่สำเร็จ: {ex}")
+
+        if not self.connected:
+            logger.warning(f"⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.ip}:{self.port}! ให้เชื่อมต่อข้อมูลจาก PLC")
+        return self.connected
 
     def disconnect(self):
         """Disconnects from PLC."""

@@ -71,6 +71,11 @@
    - อ่านและแปลง Raw Memory Bytes (Big-Endian) จากตู้ PLC Siemens S7-1200 ให้เป็นค่าทางวิศวกรรม (Engineering Values) พร้อมกำกับ Sensor Metadata (ID, ชื่อ, ป้ายกำกับ, หน่วย, Address, คุณภาพข้อมูล)
    - จัดชุดข้อมูลให้อยู่ในโครงสร้าง Batch Payload ตามมาตรฐาน Railway Cloud API (`POST /edge/devices/{deviceId}/runtimes/{runtimeId}/batches`)
    - คำสั่ง `plc-package` สามารถตรวจสอบตารางแปลงค่า Hex ➔ Value และทดสอบยิงขึ้น Cloud API ได้สดๆ ทันที
+7. **ระบบเชื่อมต่อตู้ PLC แบบอัตโนมัติ (Zero-Config Auto-Discovery & Auto-Binding)**:
+   - ตรวจจับตู้ Siemens S7-1200 บนเครือข่ายอัตโนมัติผ่านการยิง **COTP (ISO-on-TCP) Handshake Probe** บนพอร์ต 102 ทั่วทุก Subnet ภายในเวลาเพียง 0.02 วินาที
+   - ไม่ต้องตั้งพอร์ตหรือแก้โค้ดให้ยุ่งยาก เพียงกำหนด `"ip": "auto"` ระบบจะสแกนหาตู้และจับคู่เชื่อมต่อให้ทันที
+   - หากตู้ PLC เปลี่ยน IP หรือเสียบสลับตู้ ระบบ Failover Discovery จะค้นหาและสลับไปยัง IP ใหม่ให้อัตโนมัติ
+   - คำสั่งลัด `plc-discover` สำหรับสแกนค้นหาตู้ Siemens PLC ทุกเครื่องในวง LAN ได้ทันที
 
 ---
 
@@ -309,7 +314,9 @@ cd ~/edge-prototype-gen-1/pi-client
 
 | คำสั่งลัด | ความสามารถและหน้าที่ | คำสั่งเดิมที่เทียบเท่า |
 | :--- | :--- | :--- |
-| **`plc-config`** | ⚙️ **ตั้งค่าระบบและทดสอบ HTTPS Cloud:** สลับ Preset 1/2, เปลี่ยน API Key/Device ID/URL หรือเปิด Web Configurator | `python3 config_tool.py` |
+| **`plc-config`** | ⚙️ **ตั้งค่าระบบและทดสอบ HTTPS Cloud:** ตั้งชื่ออุปกรณ์, Device ID, API Key, PLC IP, หรือเปิด Web Configurator | `python3 config_tool.py` |
+| **`plc-discover`**| 🔍 **สแกนหาตู้ Siemens PLC อัตโนมัติ:** ค้นหาตู้ Siemens S7-1200 ทั่วทุก Subnet ท้องถิ่นอัตโนมัติ | `python3 plc_gateway.py --discover` |
+| **`plc-package`** | 📦 **ตรวจสอบการแปลง Raw Data & Web Batch:** ดูตาราง Hex ➔ Value และทดสอบยิง Cloud API | `python3 plc_gateway.py --package` |
 | **`plc-toolbox`** | 🧰 **เปิดสารบัญคำสั่งลัดทั้งหมด:** ดู Cheat Sheet คำสั่งทั้งหมดในหน้าเดียว | เมนูช่วยเหลือ |
 | **`plc-runtime`** | ☁️ **ดูสถานะ Cloud Runtime สดๆ:** เช็คว่า Cloud Railway มองเห็นบอร์ดหรือไม่ | `curl Railway API` |
 | **`plc-info`** | 🏷️ **แสดง Hardware Profile:** MAC Address, Serial, IP วงใน, Tailscale VPN | `python3 plc_gateway.py --info` |

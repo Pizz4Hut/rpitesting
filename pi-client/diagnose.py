@@ -222,11 +222,24 @@ def run_full_diagnosis(config_path="config_plc.json"):
         print(f"{PASS_BADGE} Physical PLC State: Connected & ready for 19-Tag acquisition")
     else:
         print(f"{FAIL_BADGE} S7comm TCP Port {plc_port}: CLOSED or connection refused")
-        print(f"{WARN_BADGE} ⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}!")
-        print(f"         • ให้เชื่อมต่อสาย LAN จากตู้ PLC S7-1200 เข้าพอร์ต eth0 ของ Raspberry Pi")
-        print(f"         • ตรวจสอบว่าตู้ PLC S7-1200 เปิดสวิตช์และไฟสถานะ RUN ติดสว่าง")
-        print(f"         • ใน Siemens TIA Portal ต้องติ๊กถูก 'Permit access with PUT/GET communication from remote partner'")
-        issues.append(f"ไม่มีข้อมูลจาก PLC: ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}")
+        # Trigger quick auto-discovery scan
+        try:
+            from plc_driver import discover_s7_plcs
+            print(f"{INFO_BADGE} 🔍 กำลังค้นหาตู้ Siemens PLC บน Subnet ท้องถิ่นอัตโนมัติ...")
+            disc = discover_s7_plcs()
+            if disc:
+                print(f"{PASS_BADGE} ✨ [Auto-Discovery] ตรวจพบตู้ Siemens S7 PLC อยู่ที่ IP {disc[0]['ip']}:{disc[0]['port']} (Latency: {disc[0]['latency_ms']}ms)!")
+                print(f"         • ระบบ Gateway จะเชื่อมต่อไปยัง IP นี้ให้อัตโนมัติ")
+                print(f"         • หรือสามารถบันทึกถาวรด้วยคำสั่ง: plc-config --set-plc-ip {disc[0]['ip']}")
+            else:
+                print(f"{WARN_BADGE} ⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}!")
+                print(f"         • ให้เชื่อมต่อสาย LAN จากตู้ PLC S7-1200 เข้าพอร์ต eth0 ของ Raspberry Pi")
+                print(f"         • ตรวจสอบว่าตู้ PLC S7-1200 เปิดสวิตช์และไฟสถานะ RUN ติดสว่าง")
+                print(f"         • ใน Siemens TIA Portal ต้องติ๊กถูก 'Permit access with PUT/GET communication from remote partner'")
+                issues.append(f"ไม่มีข้อมูลจาก PLC: ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}")
+        except Exception:
+            print(f"{WARN_BADGE} ⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}!")
+            issues.append(f"ไม่มีข้อมูลจาก PLC: ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}")
 
     # -------------------------------------------------------------
     # 4. REST API ENDPOINTS & CLOUD RUNTIME HEALTH

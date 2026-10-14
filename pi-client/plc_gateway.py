@@ -23,7 +23,7 @@ import urllib.error
 from datetime import datetime, timezone
 
 # Local modules
-from plc_driver import S7PLCClient, pack_plc_bytes, unpack_plc_bytes, format_sensor_reading
+from plc_driver import S7PLCClient, pack_plc_bytes, unpack_plc_bytes, format_sensor_reading, discover_s7_plcs
 from sqlite_buffer import SQLiteBuffer
 from pnr_generator import generate_pnr
 
@@ -227,13 +227,15 @@ class EdgeGatewayService:
         max_records = self.config.get("redundancy", {}).get("maxBufferedRecords", 50000)
         self.buffer = SQLiteBuffer(db_path=db_path, max_records=max_records)
 
-        # Initialize S7 PLC Client (Physical PLC Mode Only)
+        # Initialize S7 PLC Client (Physical PLC Mode with Auto-Discovery)
         plc_cfg = self.config.get("plc", {})
+        auto_disc = plc_cfg.get("autoDiscover", plc_cfg.get("auto_discover", True))
         self.plc = S7PLCClient(
-            ip=plc_cfg.get("ip", "192.168.2.2"),
+            ip=plc_cfg.get("ip", "auto"),
             rack=plc_cfg.get("rack", 0),
             slot=plc_cfg.get("slot", 1),
             port=plc_cfg.get("port", 102),
+            auto_discover=auto_disc,
             simulate=False
         )
 
@@ -734,10 +736,31 @@ def main():
     parser.add_argument("--package", action="store_true", help="Inspect Raw Data Hex -> Parsed Sensors & Web Batch Package")
     parser.add_argument("--sample", action="store_true", help="Use realistic sample PLC byte packets (for dry-run inspection)")
     parser.add_argument("--send", "--transmit", dest="send", action="store_true", help="Transmit the inspected batch package directly to Cloud API")
+    parser.add_argument("--discover", "--scan-plc", action="store_true", help="Auto-scan local network and discover Siemens S7 PLCs on port 102")
     parser.add_argument("--info", action="store_true", help="Display Device ID, Serial Number, MAC addresses, and exit")
     parser.add_argument("--diagnose", action="store_true", help="Run automated self-diagnosis and troubleshooting checks")
 
     args = parser.parse_args()
+
+    if args.discover:
+        print("=" * 75)
+        print("🔍 Scanning local networks for Siemens S7-1200 PLCs (Port 102)...")
+        print("=" * 75)
+        found = discover_s7_plcs()
+        if not found:
+            print("\n⚠️  No Siemens S7 PLCs found on local subnets.")
+            print("   • Please verify LAN cable connection to PLC or switching hub.")
+            print("   • Ensure PLC is powered on.")
+        else:
+            print(f"\n✅ Found {len(found)} Siemens PLC(s) on network:\n")
+            print(f"{'#':>2} | {'IP Address':<16} | {'Port':<6} | {'Latency':<10} | {'Status / Device'}")
+            print("-" * 75)
+            for idx, item in enumerate(found, 1):
+                print(f"{idx:>2} | {item['ip']:<16} | {item['port']:<6} | {item['latency_ms']} ms   | {item['details']}")
+            print("-" * 75)
+            print(f"💡 Gateway will automatically connect to {found[0]['ip']}:{found[0]['port']}.")
+        print("=" * 75 + "\n")
+        return
 
     if args.diagnose:
         from diagnose import run_full_diagnosis

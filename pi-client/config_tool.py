@@ -818,10 +818,11 @@ def interactive_menu():
         print(f"  [{CLR_CYAN}7{CLR_RESET}] 🔍 ทดสอบเชื่อมต่อ Live HTTPS Cloud API")
         print(f"  [{CLR_CYAN}8{CLR_RESET}] 🌐 เปิด Web Configurator Dashboard (พอร์ต 8080)")
         print(f"  [{CLR_CYAN}9{CLR_RESET}] 📦 ตรวจสอบการแปลง Raw Hex Data และ Web Batch Package (plc-package)")
+        print(f"  [{CLR_CYAN}A{CLR_RESET}] 🔍 สแกนค้นหาตู้ Siemens PLC อัตโนมัติ (Auto-Discover PLC on Network)")
         print(f"  [{CLR_CYAN}R{CLR_RESET}] 🚀 รีสตาร์ท Gateway Service (systemctl restart plc-gateway)")
         print(f"  [{CLR_CYAN}0{CLR_RESET}] ออก (Exit)")
 
-        choice = input(f"\n{CLR_BOLD}Enter choice [0-9, S, R]: {CLR_RESET}").strip().upper()
+        choice = input(f"\n{CLR_BOLD}Enter choice [0-9, S, A, R]: {CLR_RESET}").strip().upper()
 
         if choice == "0":
             print("Exiting.")
@@ -862,10 +863,12 @@ def interactive_menu():
             p_ip = cfg.get("plc", {}).get("ip", "192.168.2.2")
             p_port = cfg.get("plc", {}).get("port", 102)
             print(f"Current PLC Target: {p_ip}:{p_port}")
-            new_ip = input(f"Enter PLC IP address (press Enter to keep {p_ip}): ").strip()
+            new_ip = input(f"Enter PLC IP address (type 'auto' for Automatic Discovery, or press Enter to keep {p_ip}): ").strip()
             new_port = input(f"Enter PLC Port (press Enter to keep {p_port}): ").strip()
             if new_ip:
                 cfg.setdefault("plc", {})["ip"] = new_ip
+                if new_ip.lower() == "auto":
+                    cfg.setdefault("plc", {})["autoDiscover"] = True
             if new_port.isdigit():
                 cfg.setdefault("plc", {})["port"] = int(new_port)
             save_config(cfg)
@@ -914,6 +917,32 @@ def interactive_menu():
             except Exception as e:
                 print(f"{CLR_RED}Failed to inspect package: {e}{CLR_RESET}")
             input("\nPress Enter to continue...")
+        elif choice == "A":
+            print(f"\n{CLR_YELLOW}🔍 Scanning local networks for Siemens S7-1200 PLCs (Port 102)...{CLR_RESET}")
+            try:
+                from plc_driver import discover_s7_plcs
+                found = discover_s7_plcs()
+                if not found:
+                    print(f"\n{CLR_RED}⚠️  No Siemens S7 PLCs found on local subnets.{CLR_RESET}")
+                    print("   • Please verify LAN cable connection to PLC or network switch.")
+                    print("   • Ensure PLC is powered on.")
+                else:
+                    print(f"\n{CLR_GREEN}✅ Found {len(found)} Siemens PLC(s) on network:{CLR_RESET}\n")
+                    print(f"{'#':>2} | {'IP Address':<16} | {'Port':<6} | {'Latency':<10} | {'Status / Device'}")
+                    print("-" * 75)
+                    for idx, item in enumerate(found, 1):
+                        print(f"{idx:>2} | {item['ip']:<16} | {item['port']:<6} | {item['latency_ms']} ms   | {item['details']}")
+                    print("-" * 75)
+                    ans = input(f"\nDo you want to bind PLC to '{found[0]['ip']}:{found[0]['port']}'? [Y/n]: ").strip().lower()
+                    if ans in ("", "y", "yes"):
+                        cfg.setdefault("plc", {})["ip"] = found[0]["ip"]
+                        cfg.setdefault("plc", {})["port"] = found[0]["port"]
+                        cfg.setdefault("plc", {})["autoDiscover"] = True
+                        save_config(cfg)
+                        print(f"{CLR_GREEN}✓ PLC target updated to {found[0]['ip']}:{found[0]['port']} with Auto-Discovery enabled!{CLR_RESET}")
+            except Exception as e:
+                print(f"{CLR_RED}Auto-Discovery error: {e}{CLR_RESET}")
+            input("\nPress Enter to continue...")
         elif choice == "R":
             restart_gateway_service()
             time.sleep(1)
@@ -925,6 +954,7 @@ def main():
     parser.add_argument("--sensors", "--list-sensors", action="store_true", help="Display all defined sensors & memory map")
     parser.add_argument("--package", "--inspect-package", action="store_true", help="Inspect Raw Data Hex -> Parsed Sensors & Web Batch Package")
     parser.add_argument("--sample", action="store_true", help="Use realistic sample PLC byte packets (for dry-run inspection)")
+    parser.add_argument("--discover-plc", "--discover", action="store_true", help="Auto-scan local network and discover Siemens S7 PLCs on port 102")
     parser.add_argument("--test", "-t", action="store_true", help="Test live HTTPS Cloud API connection")
     parser.add_argument("--set-name", "-n", type=str, help="Set Device Name (e.g. GSE-PROTO-1)")
     parser.add_argument("--set-id", "--set-device", type=str, help="Set Cloud Device UUID")
@@ -984,6 +1014,27 @@ def main():
         from plc_gateway import EdgeGatewayService
         gw = EdgeGatewayService(config_path=CONFIG_FILE)
         gw.inspect_package(sample=args.sample, transmit=False)
+        return
+
+    if args.discover_plc:
+        from plc_driver import discover_s7_plcs
+        print("=" * 75)
+        print("🔍 Scanning local networks for Siemens S7-1200 PLCs (Port 102)...")
+        print("=" * 75)
+        found = discover_s7_plcs()
+        if not found:
+            print(f"\n{CLR_RED}⚠️  No Siemens S7 PLCs found on local subnets.{CLR_RESET}")
+            print("   • Please verify LAN cable connection to PLC or network switch.")
+            print("   • Ensure PLC is powered on.")
+        else:
+            print(f"\n{CLR_GREEN}✅ Found {len(found)} Siemens PLC(s) on network:{CLR_RESET}\n")
+            print(f"{'#':>2} | {'IP Address':<16} | {'Port':<6} | {'Latency':<10} | {'Status / Device'}")
+            print("-" * 75)
+            for idx, item in enumerate(found, 1):
+                print(f"{idx:>2} | {item['ip']:<16} | {item['port']:<6} | {item['latency_ms']} ms   | {item['details']}")
+            print("-" * 75)
+            print(f"💡 Run 'plc-config --set-plc-ip auto' to automatically bind to discovered PLC.")
+        print("=" * 75 + "\n")
         return
 
     if args.view:
