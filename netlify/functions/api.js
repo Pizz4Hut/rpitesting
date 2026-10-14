@@ -45,8 +45,43 @@ exports.handler = async (event, context) => {
       });
     }
 
-    // 2. Telemetry ingestion (POST /telemetry or root POST)
-    if ((requestPath === '/telemetry' || requestPath === '/') && method === 'POST') {
+    // 2. Heartbeat ingestion (POST /heartbeat)
+    if (requestPath === '/heartbeat' && method === 'POST') {
+      let body;
+      try {
+        body = JSON.parse(event.body || '{}');
+      } catch (err) {
+        return jsonResponse(400, { error: 'Invalid JSON payload' });
+      }
+
+      const requiredKey = process.env.DEVICE_API_KEY;
+      if (requiredKey) {
+        const providedKey = 
+          event.headers['x-api-key'] || 
+          event.headers['X-API-KEY'] || 
+          body.apiKey ||
+          (event.queryStringParameters && event.queryStringParameters.apiKey);
+
+        if (!providedKey || providedKey !== requiredKey) {
+          return jsonResponse(401, { error: 'Unauthorized: Invalid or missing x-api-key' });
+        }
+      }
+
+      if (!body.deviceId && !body.id) {
+        return jsonResponse(400, { error: "Missing required field 'deviceId'" });
+      }
+
+      const saved = await storage.saveHeartbeat(body);
+      return jsonResponse(200, {
+        success: true,
+        message: 'Heartbeat acknowledged',
+        deviceId: saved.id,
+        receivedAt: new Date().toISOString()
+      });
+    }
+
+    // 3. Telemetry ingestion (POST /telemetry or root POST)
+    if ((requestPath === '/telemetry' || requestPath === '/' || requestPath === '/telemetry/batch') && method === 'POST') {
       let body;
       try {
         body = JSON.parse(event.body || '{}');
@@ -66,6 +101,18 @@ exports.handler = async (event, context) => {
         if (!providedKey || providedKey !== requiredKey) {
           return jsonResponse(401, { error: 'Unauthorized: Invalid or missing x-api-key' });
         }
+      }
+
+      // Batch ingestion (from Store-and-Forward backlog replay)
+      if (Array.isArray(body) || (body.batch && Array.isArray(body.batch))) {
+        const records = Array.isArray(body) ? body : body.batch;
+        const savedIds = await storage.saveTelemetryBatch(records);
+        return jsonResponse(201, {
+          success: true,
+          message: `Batch telemetry of ${savedIds.length} records processed`,
+          count: savedIds.length,
+          receivedAt: new Date().toISOString()
+        });
       }
 
       if (!body.deviceId && !body.id) {
@@ -131,6 +178,61 @@ exports.handler = async (event, context) => {
     if (requestPath === '/simulate' && method === 'POST') {
       const mockDevices = [
         {
+          deviceId: 'edge-gateway-plc-01',
+          deviceName: 'Siemens S7-1200 Edge Gateway',
+          timestamp: Date.now(),
+          system: {
+            cpuTemp: +(46 + Math.random() * 8).toFixed(1),
+            cpuUsage: +(12 + Math.random() * 15).toFixed(1),
+            ramUsage: +(28 + Math.random() * 8).toFixed(1),
+            ramUsedMB: 1146,
+            ramTotalMB: 4096,
+            diskUsage: 32.4,
+            diskFreeGB: 21.6,
+            uptimeSeconds: 86400 * 3 + 14200,
+            ipAddress: '192.168.1.100',
+            hostname: 'rpi4-plc-gateway',
+            os: 'Linux 6.1.21-v8+ Raspberry Pi OS (64-bit)'
+          },
+          network: {
+            lan1_plc: { interface: 'eth0', ip: '192.168.0.50', status: 'connected' },
+            lan2_internet: { interface: 'eth1', ip: '192.168.1.100', status: 'up' }
+          },
+          redundancy: {
+            bufferQueueDepth: 0,
+            storeAndForwardActive: true,
+            lastHeartbeat: Date.now()
+          },
+          plc: {
+            connected: true,
+            ip: '192.168.0.10',
+            rack: 0,
+            slot: 1,
+            lifebit: Math.random() > 0.5 ? 1 : 0,
+            tags: {
+              spindle_temperature: { name: 'Main Spindle Temperature', address: 'DB1.DBD0', type: 'REAL', value: +(64.5 + Math.random() * 4).toFixed(1), unit: '°C', quality: 'GOOD' },
+              motor_current: { name: 'Motor Phase Current', address: 'DB1.DBD4', type: 'REAL', value: +(14.2 + Math.random() * 1.5).toFixed(2), unit: 'A', quality: 'GOOD' },
+              motor_voltage: { name: 'Supply Bus Voltage', address: 'DB1.DBD8', type: 'REAL', value: +(381.0 + Math.random() * 2).toFixed(1), unit: 'V', quality: 'GOOD' },
+              hydraulic_pressure: { name: 'Hydraulic System Pressure', address: 'DB1.DBD12', type: 'REAL', value: +(120.4 + Math.random() * 4).toFixed(1), unit: 'bar', quality: 'GOOD' },
+              pneumatic_pressure: { name: 'Pneumatic Air Pressure', address: 'DB1.DBD16', type: 'REAL', value: +(6.2 + Math.random() * 0.4).toFixed(2), unit: 'bar', quality: 'GOOD' },
+              line_speed: { name: 'Conveyor Line Speed', address: 'DB1.DBD20', type: 'REAL', value: +(45.0 + Math.random() * 2).toFixed(1), unit: 'm/min', quality: 'GOOD' },
+              vibration_level: { name: 'Spindle Bearing Vibration RMS', address: 'DB1.DBD24', type: 'REAL', value: +(1.24 + Math.random() * 0.2).toFixed(2), unit: 'mm/s', quality: 'GOOD' },
+              coolant_flow_rate: { name: 'Coolant Liquid Flow Rate', address: 'DB1.DBD28', type: 'REAL', value: +(18.5 + Math.random() * 1.2).toFixed(1), unit: 'L/min', quality: 'GOOD' },
+              coolant_temp: { name: 'Coolant Reservoir Temperature', address: 'DB1.DBD32', type: 'REAL', value: +(23.8 + Math.random() * 1.5).toFixed(1), unit: '°C', quality: 'GOOD' },
+              total_production_count: { name: 'Total Output Production Units', address: 'DB1.DBD36', type: 'DINT', value: 4820, unit: 'pcs', quality: 'GOOD' },
+              good_parts_count: { name: 'Passed Quality Units', address: 'DB1.DBD40', type: 'DINT', value: 4768, unit: 'pcs', quality: 'GOOD' },
+              defect_parts_count: { name: 'Rejected Defect Units', address: 'DB1.DBD44', type: 'DINT', value: 52, unit: 'pcs', quality: 'GOOD' },
+              cycle_time_current: { name: 'Current Cycle Duration', address: 'DB1.DBD48', type: 'REAL', value: +(12.4 + Math.random() * 0.8).toFixed(1), unit: 's', quality: 'GOOD' },
+              cycle_time_target: { name: 'Target Standard Cycle Time', address: 'DB1.DBD52', type: 'REAL', value: 12.0, unit: 's', quality: 'GOOD' },
+              machine_operating_hours: { name: 'Cumulative Running Hours', address: 'DB1.DBD56', type: 'REAL', value: 1428.5, unit: 'h', quality: 'GOOD' },
+              machine_status_running: { name: 'Machine Run State', address: 'DB1.DBX60.0', type: 'BOOL', value: true, unit: 'state', quality: 'GOOD' },
+              machine_status_fault: { name: 'Machine Fault Alarm Active', address: 'DB1.DBX60.1', type: 'BOOL', value: false, unit: 'state', quality: 'GOOD' },
+              emergency_stop_ok: { name: 'Emergency Stop Healthy Status', address: 'DB1.DBX60.2', type: 'BOOL', value: true, unit: 'state', quality: 'GOOD' },
+              active_alarm_code: { name: 'Active Fault Alarm Code', address: 'DB1.DBW62', type: 'INT', value: 0, unit: 'code', quality: 'GOOD' }
+            }
+          }
+        },
+        {
           deviceId: 'raspberry-pi-4-lab',
           deviceName: 'Pi 4B • Lab Server',
           timestamp: Date.now(),
@@ -193,6 +295,7 @@ exports.handler = async (event, context) => {
       error: 'Not Found',
       availableEndpoints: [
         'POST /api/telemetry',
+        'POST /api/heartbeat',
         'GET /api/devices',
         'GET /api/devices/:id',
         'DELETE /api/devices/:id',

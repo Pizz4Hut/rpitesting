@@ -1,0 +1,30 @@
+[Unit]
+Description=Siemens S7-1200 IoT Edge Gateway Service
+Documentation=https://github.com/Pizz4Hut/rpitesting
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/rpitesting/pi-client
+ExecStart=/usr/bin/python3 /home/pi/rpitesting/pi-client/plc_gateway.py --config /home/pi/rpitesting/pi-client/config_plc.json
+
+# Auto-restart resilience
+Restart=always
+RestartSec=5s
+
+# Process priority
+Nice=-5
+
+# Standard Logging to systemd journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plc-gateway
+
+# Memory and Resource protection
+MemoryMax=512M
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

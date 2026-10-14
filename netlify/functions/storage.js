@@ -146,6 +146,9 @@ async function saveTelemetry(payload) {
         os: payload.system?.os ?? payload.os ?? 'Raspberry Pi OS'
       },
       sensors: payload.sensors || {},
+      plc: payload.plc || existing.latest?.plc || null,
+      redundancy: payload.redundancy || existing.latest?.redundancy || null,
+      network: payload.network || existing.latest?.network || null,
       raw: payload
     },
     history: updatedHistory
@@ -153,16 +156,31 @@ async function saveTelemetry(payload) {
 
   devices[deviceId] = updatedDevice;
 
-  // Add event log if high temp or new registration
+  // Add event log if high temp or new registration or PLC event
+  let eventMsg = `Telemetry received from ${deviceName} (CPU: ${cpuTemp ?? 'N/A'}°C, Load: ${cpuUsage ?? 'N/A'}%)`;
+  let eventType = 'info';
+
+  if (cpuTemp && cpuTemp >= 75) {
+    eventMsg = `High CPU Temperature Alert: ${cpuTemp}°C on ${deviceName}`;
+    eventType = 'warning';
+  } else if (payload.plc) {
+    if (payload.plc.connected === false) {
+      eventMsg = `⚠️ PLC Disconnected on ${deviceName} (${payload.plc.ip || 'S7-1200'})`;
+      eventType = 'warning';
+    } else if (payload.plc.connected === true) {
+      const tagCount = payload.plc.tags ? Object.keys(payload.plc.tags).length : 0;
+      eventMsg = `📥 PLC S7-1200 Data Synced: ${tagCount} tags from ${deviceName}`;
+      eventType = 'info';
+    }
+  }
+
   const event = {
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
     deviceId,
     deviceName,
     timestamp,
-    message: cpuTemp && cpuTemp >= 75 
-      ? `High CPU Temperature Alert: ${cpuTemp}°C on ${deviceName}`
-      : `Telemetry received from ${deviceName} (CPU: ${cpuTemp ?? 'N/A'}°C, Load: ${cpuUsage ?? 'N/A'}%)`,
-    type: cpuTemp && cpuTemp >= 75 ? 'warning' : 'info'
+    message: eventMsg,
+    type: eventType
   };
 
   // Persist
@@ -200,6 +218,77 @@ async function getRecentEvents() {
   return inMemoryStore.events || [];
 }
 
+async function saveHeartbeat(payload) {
+  const deviceId = (payload.deviceId || payload.id || 'raspberrypi-default').toString().trim();
+  const deviceName = payload.deviceName || payload.name || deviceId;
+  const timestamp = payload.timestamp || Date.now();
+
+  const devices = await getAllDevices();
+  const existing = devices[deviceId] || {
+    id: deviceId,
+    name: deviceName,
+    firstSeen: timestamp,
+    history: []
+  };
+
+  const cpuTemp = payload.system?.cpuTemp ?? existing.latest?.system?.cpuTemp ?? null;
+
+  const updatedDevice = {
+    ...existing,
+    id: deviceId,
+    name: deviceName,
+    lastSeen: timestamp,
+    computedStatus: computeDeviceStatus(timestamp, cpuTemp),
+    latest: {
+      ...(existing.latest || {}),
+      timestamp,
+      system: payload.system ? {
+        ...(existing.latest?.system || {}),
+        ...payload.system
+      } : (existing.latest?.system || {}),
+      plc: payload.plc ? {
+        ...(existing.latest?.plc || {}),
+        ...payload.plc
+      } : (existing.latest?.plc || null),
+      redundancy: payload.redundancy ? {
+        ...(existing.latest?.redundancy || {}),
+        ...payload.redundancy
+      } : (existing.latest?.redundancy || null),
+      network: payload.network ? {
+        ...(existing.latest?.network || {}),
+        ...payload.network
+      } : (existing.latest?.network || null)
+    }
+  };
+
+  devices[deviceId] = updatedDevice;
+
+  // Persist
+  const store = await getBlobStore();
+  if (store) {
+    try {
+      await store.setJSON('devices', devices);
+    } catch (e) {}
+  }
+
+  inMemoryStore.devices = devices;
+  saveLocalStore();
+
+  return updatedDevice;
+}
+
+async function saveTelemetryBatch(batch) {
+  if (!Array.isArray(batch)) return [];
+  const results = [];
+  for (const item of batch) {
+    if (item && (item.deviceId || item.id)) {
+      const res = await saveTelemetry(item);
+      results.push(res.id);
+    }
+  }
+  return results;
+}
+
 async function deleteDevice(deviceId) {
   const devices = await getAllDevices();
   if (devices[deviceId]) {
@@ -221,6 +310,9 @@ module.exports = {
   getAllDevices,
   getDevice,
   saveTelemetry,
+  saveHeartbeat,
+  saveTelemetryBatch,
   getRecentEvents,
   deleteDevice
 };
+

@@ -1,218 +1,208 @@
-# 🍓 Raspberry Pi IoT Netlify Telemetry Hub & Dashboard
+# 🏭 Siemens S7-1200 IoT Edge Gateway (Raspberry Pi 4)
+## ระบบส่งข้อมูลจากเครื่องจักรขึ้น HTTP REST API พร้อม Redundancy & Heartbeat 2 ทิศทาง
 
-A production-ready Netlify serverless website for receiving sensor and system telemetry from one or more Raspberry Pi devices, featuring a real-time monitoring dashboard and device status indicators.
-
----
-
-## ✨ Features
-
-- **Netlify Serverless API**: Lightweight serverless endpoints (`/api/telemetry`, `/api/devices`, `/api/devices/:id`) deployed on Netlify Functions with CORS enabled.
-- **Real-Time IoT Dashboard**:
-  - **Hardware Telemetry**: CPU Temperature (°C & °F), CPU Load (%), RAM Usage (%), Disk Free/Used (GB), System Uptime, IP Address, OS / Kernel.
-  - **Device Status Indicators**: 🟢 **Online** (< 45s heartbeat), 🟡 **Idle / Warning** (high CPU temperature $\ge 75^\circ\text{C}$ or silent for 45s-2m), 🔴 **Offline** (> 2 minutes without heartbeat).
-  - **Live Historical Charts**: Interactive time-series charts (Chart.js) for CPU Thermal Zone vs Ambient Temperature and CPU/RAM Load.
-  - **Multi-Device Support**: Fleet monitoring with one-click device switching.
-  - **Telemetry Log Stream**: Live table of incoming alerts and events.
-  - **One-Click Simulator**: Test and demo live telemetry in your browser without hardware attached.
-- **Plug-and-Play Raspberry Pi Client**:
-  - Python 3 client (`pi-client/pi_agent.py`) that reads real Linux `/sys/class/thermal` thermal sensors, CPU/RAM/Disk stats, and custom GPIO / I2C sensors.
-  - Resilient network retries with automatic reconnects.
-  - Ready-to-use systemd service unit (`pi-agent.service`) to run continuously on boot.
-- **Zero-Config Persistence**: Uses Netlify Blobs (`@netlify/blobs`) when deployed to Netlify, with an automatic local fallback for local development.
+ระบบ IoT Edge Gateway ออกแบบมาสำหรับติดตั้งบน **Raspberry Pi 4** เพื่อดึงข้อมูลจาก **PLC Siemens S7-1200** ผ่าน S7comm Protocol (TCP Port 102) และส่งข้อมูลไปยัง **HTTP REST API** ตามข้อกำหนดใน TOR โดยมีระบบ **Redundancy (Store-and-Forward SQLite)** และ **Two-way Heartbeat** เพื่อความเสถียรสูงสุด ป้องกันข้อมูลสูญหาย 100%
 
 ---
 
-## 📁 Project Structure
+## 📌 สรุปภาพรวมและผังระบบ (System Architecture)
 
 ```
-├── netlify.toml               # Netlify configuration (functions, headers, rewrites)
-├── package.json               # Project manifest
-├── server.js                  # Local dev server (emulates Netlify Functions locally)
-├── netlify/
-│   └── functions/
-│       ├── api.js             # Serverless handler for /api/* endpoints
-│       └── storage.js         # Netlify Blobs + local memory storage adapter
-├── public/
-│   ├── index.html             # Responsive IoT dashboard (Tailwind CSS, Lucide icons)
-│   ├── app.js                 # Dashboard logic, auto-refresh polling, Chart.js updates
-│   └── styles.css             # Custom styles, badges, and animations
-├── pi-client/
-│   ├── pi_agent.py            # Python telemetry agent for Raspberry Pi
-│   ├── setup.sh               # 1-click shell installer for Raspberry Pi OS
-│   ├── pi-agent.service       # Systemd service for auto-start on boot
-│   ├── requirements.txt       # Python dependencies (psutil, requests)
-│   └── config.json.example    # Configuration template
-└── README.md
+[ Siemens S7-1200 PLC ] (192.168.0.10:102)
+          │
+          │ LAN 1 (eth0: 192.168.0.50 / 0.51)
+          ▼
+[ Raspberry Pi 4 Edge Gateway ]
+  ├─ gse-proto-1 (Master Gateway)
+  └─ gse-proto-2 (Redundant Backup)
+          │
+          │ LAN 2 (eth1 / Wi-Fi)
+          ▼
+   Switching Hub ──► [ Mac / Workstation / Internet Router ]
+          │
+          ▼
+[ HTTP/HTTPS REST API Endpoint ]
 ```
 
 ---
 
-## 🚀 Quick Start (Local Testing)
+## ⚙️ คุณสมบัติเด่นของระบบ (Core Features)
 
-You can run and test the complete application locally right now:
+1. **ดึงข้อมูล Siemens S7-1200 (19 Tags)**:
+   - สื่อสารผ่าน S7comm protocol (Port 102) อ้างอิง Direct DB Addressing (`DB1.DBD0`, `DB1.DBW4`, `DB1.DBX60.0` ฯลฯ)
+2. **ระบบ Redundancy: Store-and-Forward (SQLite WAL Mode)**:
+   - หากยิง HTTP API ไม่สำเร็จ หรือเครือข่ายอินเทอร์เน็ตหลุด ข้อมูลจะไม่สูญหาย แต่จะถูกพักเก็บใน SQLite database (`buffer.db`) ภายในตัวบอร์ด Pi
+   - เมื่อระบบเครือข่ายกลับมาเชื่อมต่อได้ ตัว Replay Drainer จะดึงข้อมูลย้อนหลังส่งขึ้น API เป็นชุด (Batch Replay) ตามลำดับเวลา FIFO โดยคง Timestamp ดั้งเดิม
+3. **ระบบ Heartbeat 2 ทิศทาง (Two-way Heartbeat)**:
+   - **Gateway ⟷ Cloud/Server**: ส่ง Heartbeat Ping ทุกๆ 30 วินาที ผ่าน HTTP POST รายงาน CPU Temp, RAM, Disk, สถานะการเชื่อมต่อ PLC และจำนวนคิวออฟไลน์ที่ค้างอยู่
+   - **Gateway ⟷ PLC**: สลับบิต Lifebit (`DB1.DBX0.0`) ทุกๆ 5 วินาที เพื่อให้ Ladder Logic ใน PLC ตรวจจับได้ หาก Gateway หยุดทำงาน PLC สามารถส่ง Alarm เตือนหน้าตู้ได้ทันที
+4. **ตรวจจับ Hardware Profile อัตโนมัติ (MAC Address & Serial Number)**:
+   - มีคำสั่ง `python3 plc_gateway.py --info` เพื่อแสดง MAC Address ของทั้ง 2 พอร์ต LAN และ Serial Number ที่อ่านจากชิป CPU BCM2711 อัตโนมัติ เพื่อนำไปลงทะเบียน Firewall / MAC Filtering
 
-### 1. Start the local server
+---
+
+## 📖 คู่มือการติดตั้งและตั้งค่าตั้งแต่เริ่มต้น (Step-by-Step Tutorial)
+
+### ขั้นตอนที่ 1: การเตรียม SD Card ด้วย Raspberry Pi Imager
+1. เสียบ MicroSD Card เข้ากับคอมพิวเตอร์ แล้วเปิดโปรแกรม **Raspberry Pi Imager**
+2. เลือก OS: **Raspberry Pi OS (64-bit)**
+3. ในหน้าต่างตั้งค่า OS Customisation ให้กำหนดค่าดังนี้:
+   * **เครื่องที่ 1 (Master):**
+     * Hostname: `gse-proto-1`
+     * Username: `groundshift_supreme_admin`
+     * Password: `abcd1234#`
+   * **เครื่องที่ 2 (Backup):**
+     * Hostname: `gse-proto-2`
+     * Username: `groundshift_supreme_admin`
+     * Password: `abcd1234#`
+   * **แท็บ SERVICES (สำคัญมาก):**
+     * ติ๊กถูกที่ **☑ "Enable SSH"** และเลือก **"Use password authentication"**
+4. กด **Write** ลง SD Card แล้วนำไปใส่ใน Raspberry Pi 4
+
+> [!TIP]
+> **หากเกิดปัญหา `Connection refused port 22`:**
+> เกิดจากตอนเบิร์นลืมติ๊กเปิด SSH วิธีแก้คือถอด SD Card มาเสียบ Mac แล้วสร้างไฟล์เปล่าชื่อ `ssh` ไว้ที่ไดรฟ์บูต (`touch /Volumes/bootfs/ssh` หรือ `touch /Volumes/boot/ssh`) แล้วเสียบกลับเปิดเครื่องใหม่
+
+---
+
+### ขั้นตอนที่ 2: การต่อสายฮาร์ดแวร์ (Hardware Wiring)
+* **พอร์ต LAN ในตัวบอร์ด Pi (`eth0`):** เสียบเข้าพอร์ต LAN ของ Siemens S7-1200 PLC
+* **พอร์ต LAN เสริมผ่าน USB (`eth1`):** เสียบเข้า Switching Hub ร่วมกับสายแลนจาก Mac หรือ Router อินเทอร์เน็ต
+
+---
+
+### ขั้นตอนที่ 3: การตั้งค่าฝั่ง PLC Siemens S7-1200 (TIA Portal)
+1. **เปิดฟังก์ชัน PUT/GET:**
+   * เปิด TIA Portal &rarr; ไปที่ `Device Configuration` &rarr; ดับเบิลคลิก CPU S7-1200
+   * ไปที่แท็บ `Properties` &rarr; `Protection & Security` &rarr; `Connection mechanisms`
+   * ติ๊กถูกที่ **☑ "Permit access with PUT/GET communication from remote partner"**
+2. **ปลด Optimized Block Access:**
+   * คลิกขวาที่ Data Block `DB1` &rarr; เลือก `Properties` &rarr; แท็บ `Attributes`
+   * **เอาเครื่องหมายถูกออก (Uncheck)** จากช่อง **☐ "Optimized block access"**
+   * Compile และ Download ลง PLC
+
+---
+
+### ขั้นตอนที่ 4: การติดตั้งโปรแกรมบน Raspberry Pi
+เชื่อมต่อ SSH เข้าไปยังบอร์ด Pi:
 ```bash
-npm start
-# or: node server.js
+# สำหรับเครื่องที่ 1
+ssh groundshift_supreme_admin@gse-proto-1.local
+
+# สำหรับเครื่องที่ 2
+ssh groundshift_supreme_admin@gse-proto-2.local
 ```
-Open **http://localhost:8888** in your browser.
+*(กรอกรหัสผ่าน: `abcd1234#`)*
 
-### 2. Test in the browser
-- Click **"Simulate Pi"** in the top navigation bar to generate instant sample telemetry for two Raspberry Pi devices.
-- Notice the KPI counters, temperature gauges, and live charts updating in real-time!
-
-### 3. Send test telemetry with `curl`
+เมื่อล็อกอินสำเร็จ ให้รันคำสั่งติดตั้งโปรเจกต์:
 ```bash
-curl -X POST "http://localhost:8888/api/telemetry" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "deviceId": "rpi-my-desk",
-    "deviceName": "Desk Pi 4B",
-    "system": {
-      "cpuTemp": 49.2,
-      "cpuUsage": 18.5,
-      "ramUsage": 34.0,
-      "ramUsedMB": 1390,
-      "ramTotalMB": 4096,
-      "diskUsage": 42.1,
-      "diskFreeGB": 17.5,
-      "uptimeSeconds": 72400,
-      "ipAddress": "192.168.1.55"
-    },
-    "sensors": {
-      "ambientTemp": 24.1,
-      "humidity": 52.0
-    }
-  }'
+# 1. Clone คลังโปรเจกต์
+git clone https://github.com/Pizz4Hut/edge-prototype-gen-1.git
+cd edge-prototype-gen-1/pi-client
+
+# 2. รันสคริปต์ติดตั้งระบบอัตโนมัติ
+chmod +x setup_plc_gateway.sh
+./setup_plc_gateway.sh
+
+# 3. ตรวจสอบ Hardware MAC Address และ Serial Number ประจำบอร์ด
+python3 plc_gateway.py --info
+```
+
+ผลลัพธ์จะแสดงข้อมูลดังนี้:
+```text
+=================================================================
+🍓 Raspberry Pi 4 Edge Gateway - Hardware & Network Profile
+=================================================================
+Device Name:     Edge Prototype Gen-1
+Device ID:       gse-proto-1
+Serial Number:   10000000a1b2c3d4 (อ่านจาก CPU RPi4 อัตโนมัติ)
+-----------------------------------------------------------------
+LAN 1 (PLC Network):     eth0
+  IP Address:            192.168.0.50
+  MAC Address:           b8:27:eb:11:22:33  <-- นำไปลงทะเบียนวง PLC
+  Target PLC IP:         192.168.0.10:102
+-----------------------------------------------------------------
+LAN 2 (Internet / API):  eth1
+  IP Address:            192.168.1.100
+  MAC Address:           00:e0:4c:53:44:55  <-- นำไปส่งให้ IT ทำ Whitelist
+=================================================================
 ```
 
 ---
 
-## ☁️ Deploying to Netlify
-
-### Option A: Via GitHub / GitLab / Bitbucket (Recommended)
-1. Push this repository to GitHub:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit of Raspberry Pi IoT Netlify site"
-   git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
-   git push -u origin main
-   ```
-2. Log in to [Netlify](https://app.netlify.com/).
-3. Click **"Add new site"** &rarr; **"Import an existing project"**.
-4. Select your repository.
-5. Netlify will auto-detect settings from `netlify.toml`:
-   - **Publish directory**: `public`
-   - **Functions directory**: `netlify/functions`
-6. Click **Deploy Site**. Your website will be live at `https://YOUR-SITE-NAME.netlify.app`!
-
-### Option B: Via Netlify CLI
+### ขั้นตอนที่ 5: การตั้งค่าไฟล์ `config_plc.json`
+เปิดแก้ไขไฟล์ตั้งค่า:
 ```bash
-# Login to Netlify
-npx netlify login
-
-# Deploy
-npx netlify deploy --prod
+nano config_plc.json
 ```
-
-### 🔒 Optional: API Key Security
-If you want to protect your `/api/telemetry` endpoint so only your devices can push data:
-1. In the Netlify Dashboard, go to **Site settings &rarr; Environment variables**.
-2. Add a new variable:
-   - **Key**: `DEVICE_API_KEY`
-   - **Value**: `YOUR_SECRET_TOKEN_123`
-3. Provide this key in your Raspberry Pi configuration or pass header `x-api-key: YOUR_SECRET_TOKEN_123`.
-
----
-
-## 🍓 Raspberry Pi Client Setup
-
-### 1. Copy `pi-client` to your Raspberry Pi
-Transfer the `pi-client` folder to your Raspberry Pi via SCP, Git, or USB:
-```bash
-scp -r pi-client pi@raspberrypi.local:/home/pi/
-```
-
-### 2. Run the quick installer
-SSH into your Raspberry Pi:
-```bash
-ssh pi@raspberrypi.local
-cd pi-client
-chmod +x setup.sh
-./setup.sh
-```
-
-### 3. Run the telemetry agent
-```bash
-python3 pi_agent.py \
-  --url https://YOUR-NETLIFY-SITE.netlify.app/api/telemetry \
-  --device-id rpi-living-room \
-  --device-name "Living Room Pi" \
-  --interval 10
-```
-
-### 4. Enable auto-start on boot (Systemd)
-To ensure the telemetry agent runs continuously in the background:
-```bash
-# 1. Edit config.json with your Netlify URL:
-cp config.json.example config.json
-nano config.json
-
-# 2. Install and enable the systemd service:
-sudo cp pi-agent.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now pi-agent
-
-# 3. Check status:
-sudo systemctl status pi-agent
-```
-
----
-
-## 🔌 API Reference
-
-### 1. `POST /api/telemetry`
-Receives telemetry payload from devices.
-- **Headers**:
-  - `Content-Type: application/json`
-  - `x-api-key: <optional_key>`
-- **Payload Schema**:
+ตั้งค่าข้อมูลของเครื่อง:
 ```json
 {
-  "deviceId": "rpi-living-room",
-  "deviceName": "Living Room Pi 4",
-  "timestamp": 1728770000000,
-  "system": {
-    "cpuTemp": 48.5,
-    "cpuUsage": 14.2,
-    "ramUsage": 32.5,
-    "ramUsedMB": 1330,
-    "ramTotalMB": 4096,
-    "diskUsage": 45.1,
-    "diskFreeGB": 14.8,
-    "uptimeSeconds": 86400,
-    "ipAddress": "192.168.1.105",
-    "hostname": "raspberrypi",
-    "os": "Linux 6.1.21-v8+"
+  "deviceId": "gse-proto-1",
+  "deviceName": "Edge Prototype Gateway 1",
+  "serialNumber": "auto",
+  "api": {
+    "telemetryUrl": "http://YOUR_API_SERVER/api/telemetry",
+    "batchTelemetryUrl": "http://YOUR_API_SERVER/api/telemetry/batch",
+    "heartbeatUrl": "http://YOUR_API_SERVER/api/heartbeat",
+    "transmissionIntervalSec": 3600,
+    "heartbeatIntervalSec": 30
   },
-  "sensors": {
-    "ambientTemp": 23.4,
-    "humidity": 55.2,
-    "pressure": 1013.25
+  "plc": {
+    "ip": "192.168.0.10",
+    "simulate": false
   }
 }
 ```
 
-### 2. `GET /api/devices`
-Returns all registered devices, status metrics, and recent events.
+---
 
-### 3. `GET /api/devices/:id`
-Returns real-time data and historical time-series for a single device.
+### ขั้นตอนที่ 6: การทดสอบและการเปิดทำงานอัตโนมัติ 24/7
 
-### 4. `DELETE /api/devices/:id`
-Deregisters and removes a device from the dashboard.
+#### 1. ทดสอบรันดึงค่าและส่งขึ้น API (1 รอบ):
+```bash
+python3 plc_gateway.py --once
+```
 
-### 5. `POST /api/simulate`
-Generates mock telemetry data for testing.
+#### 2. ทดสอบ Burn-in Stability Test (24 - 72 ชั่วโมง ตาม TOR ข้อ 2.3):
+```bash
+python3 plc_simulator.py --hours 24 --interval 10 --log burnin_report.log
+```
+
+#### 3. เปิดให้ทำงานอัตโนมัติเป็น Background Service:
+```bash
+# เริ่มรัน Service
+sudo systemctl start plc-gateway
+
+# เช็คสถานะการทำงาน (ต้องขึ้นสีเขียว active running)
+sudo systemctl status plc-gateway
+
+# ดู Live Log การทำงาน
+sudo journalctl -u plc-gateway -f
+```
+
+---
+
+## 📁 รายการไฟล์สำคัญใน `pi-client/`
+
+| ชื่อไฟล์ | คำอธิบาย |
+| :--- | :--- |
+| `plc_gateway.py` | โปรแกรมหลักของ Gateway (ดึงค่า PLC, ส่ง HTTP API, จัดการ Redundancy & Heartbeat) |
+| `sqlite_buffer.py` | ระบบฐานข้อมูล SQLite Store-and-Forward เก็บข้อมูลออฟไลน์ป้องกันข้อมูลสูญหาย |
+| `plc_driver.py` | ไดรเวอร์ S7comm รองรับ Siemens S7-1200 และโหมดจำลอง Simulation |
+| `plc_simulator.py` | สคริปต์รัน Burn-in Test 24-72 ชม. และออกรายงานผล HTTP 200 OK |
+| `config_plc.json` | ไฟล์คอนฟิก IP, พอร์ต, ความถี่การส่ง, และตาราง Memory Map 19 Tags |
+| `plc-gateway.service`| ไฟล์ Unit Service สำหรับตั้งค่าให้ระบบทำงานอัตโนมัติ 24/7 บน systemd |
+| `setup_plc_gateway.sh`| สคริปต์ 1-Click ติดตั้ง Dependencies และลงทะเบียน Service บน Raspberry Pi 4 |
+
+---
+
+## 🐙 การจัดการ Git Repository
+
+โปรเจกต์นี้ผูก Remote สำหรับคลังหลักไว้เรียบร้อยแล้ว:
+```bash
+# Push ขึ้นคลังหลัก edge-prototype-gen-1
+git add .
+git commit -m "feat: complete S7-1200 Edge Gateway with Redundancy, Heartbeat, MAC, and Serial detection"
+git push -u prototype main
+```

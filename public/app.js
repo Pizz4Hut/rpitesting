@@ -341,6 +341,85 @@ function renderSelectedDevice() {
   valPressure.textContent = sensors.pressure ? `${sensors.pressure} hPa` : '--';
   valCustomSensor.textContent = sensors.soilMoisture ? `${sensors.soilMoisture}% moisture` : (sensors.status || '--');
 
+  // Siemens S7-1200 PLC & Redundancy Section
+  const plcCard = document.getElementById('plcDetailsCard');
+  const plcData = device.latest?.plc;
+  const netData = device.latest?.network;
+  const redData = device.latest?.redundancy;
+
+  if (plcCard) {
+    if (plcData) {
+      plcCard.classList.remove('hidden');
+
+      // Badges
+      const plcBadge = document.getElementById('plcStatusBadge');
+      if (plcBadge) {
+        if (plcData.connected) {
+          plcBadge.textContent = 'CONNECTED';
+          plcBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+        } else {
+          plcBadge.textContent = 'DISCONNECTED';
+          plcBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20';
+        }
+      }
+
+      const lifebitBadge = document.getElementById('plcLifebitBadge');
+      if (lifebitBadge) {
+        lifebitBadge.textContent = `Lifebit: ${plcData.lifebit !== undefined ? plcData.lifebit : (plcData.connected ? 1 : 0)}`;
+      }
+
+      // Network & Redundancy
+      const valLan1 = document.getElementById('valLan1Ip');
+      if (valLan1) {
+        valLan1.textContent = `${netData?.lan1_plc?.interface || 'eth0'}: ${netData?.lan1_plc?.ip || '192.168.0.50'}`;
+      }
+      const valTarget = document.getElementById('valPlcTargetIp');
+      if (valTarget) {
+        valTarget.textContent = `Target: ${plcData.ip || '192.168.0.10'}:102`;
+      }
+      const valLan2 = document.getElementById('valLan2Ip');
+      if (valLan2) {
+        valLan2.textContent = `${netData?.lan2_internet?.interface || 'eth1'}: ${netData?.lan2_internet?.ip || '192.168.1.100'}`;
+      }
+      const valQueue = document.getElementById('valBufferQueue');
+      if (valQueue) {
+        const depth = redData?.bufferQueueDepth ?? 0;
+        valQueue.textContent = `${depth} Pending in SQLite`;
+        valQueue.className = depth > 0 ? 'font-bold text-amber-400 text-sm' : 'font-bold text-brand-400 text-sm';
+      }
+
+      // Tags table
+      const tagsTableBody = document.getElementById('plcTagsTableBody');
+      if (tagsTableBody) {
+        const tags = plcData.tags || {};
+        const tagEntries = Object.entries(tags);
+
+        if (tagEntries.length === 0) {
+          tagsTableBody.innerHTML = `<tr><td colspan="6" class="py-4 text-center text-slate-500 italic">No PLC tags loaded yet.</td></tr>`;
+        } else {
+          tagsTableBody.innerHTML = tagEntries.map(([key, tag]) => {
+            const isBool = typeof tag.value === 'boolean';
+            const displayVal = isBool ? (tag.value ? 'TRUE' : 'FALSE') : (tag.value ?? '--');
+            const qualityClass = tag.quality === 'BAD' ? 'text-rose-400' : 'text-emerald-400';
+
+            return `
+              <tr class="hover:bg-surface-800/50 font-mono text-xs">
+                <td class="px-3 py-2 text-slate-200 font-sans font-medium">${escapeHtml(tag.name || key)}</td>
+                <td class="px-3 py-2 text-slate-400">${escapeHtml(tag.address || '--')}</td>
+                <td class="px-3 py-2 text-slate-400 text-[11px]">${escapeHtml(tag.type || 'REAL')}</td>
+                <td class="px-3 py-2 font-bold ${isBool ? (tag.value ? 'text-emerald-400' : 'text-slate-400') : 'text-white'}">${displayVal}</td>
+                <td class="px-3 py-2 text-slate-400">${escapeHtml(tag.unit || '')}</td>
+                <td class="px-3 py-2 font-semibold ${qualityClass}">${escapeHtml(tag.quality || 'GOOD')}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+    } else {
+      plcCard.classList.add('hidden');
+    }
+  }
+
   // Charts
   updateCharts(device);
 }

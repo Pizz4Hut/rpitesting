@@ -340,6 +340,66 @@
             <span class="text-xs text-slate-400">Custom / Soil</span>
             <p class="text-lg font-bold text-white mt-1" id="valCustomSensor">--</p>
           </div>
+      </div>
+
+      <!-- Siemens S7-1200 PLC & Redundancy Section -->
+      <div id="plcDetailsCard" class="bg-surface-850 rounded-xl p-5 border border-surface-700/60 hidden">
+        <div class="flex items-center justify-between mb-4 border-b border-surface-700/50 pb-3">
+          <div class="flex items-center space-x-2">
+            <span class="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
+              <i data-lucide="cpu" class="w-4 h-4"></i>
+            </span>
+            <div>
+              <h3 class="text-sm font-semibold text-white">Siemens S7-1200 Industrial PLC Link</h3>
+              <p class="text-xs text-slate-400">S7 Protocol (TCP/IP Port 102) • Direct DB Addressing</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-3">
+            <span id="plcStatusBadge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Connected
+            </span>
+            <span id="plcLifebitBadge" class="px-2 py-0.5 rounded text-[11px] font-mono bg-surface-700 text-slate-300">
+              Lifebit: 1
+            </span>
+          </div>
+        </div>
+
+        <!-- Network & Redundancy Info Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-xs font-mono">
+          <div class="bg-surface-800 p-3 rounded-lg border border-surface-700/70">
+            <span class="text-slate-400 block mb-1">🔌 LAN 1 (PLC Network)</span>
+            <span class="font-bold text-white text-sm" id="valLan1Ip">eth0: 192.168.0.50</span>
+            <span class="text-slate-400 block text-[10px] mt-0.5" id="valPlcTargetIp">Target: 192.168.0.10:102</span>
+          </div>
+          <div class="bg-surface-800 p-3 rounded-lg border border-surface-700/70">
+            <span class="text-slate-400 block mb-1">🌐 LAN 2 (Internet REST API)</span>
+            <span class="font-bold text-white text-sm" id="valLan2Ip">eth1: 192.168.1.100</span>
+            <span class="text-slate-400 block text-[10px] mt-0.5">Route: Dedicated Gateway</span>
+          </div>
+          <div class="bg-surface-800 p-3 rounded-lg border border-surface-700/70">
+            <span class="text-slate-400 block mb-1">🛡️ Redundancy (Store-and-Forward)</span>
+            <span class="font-bold text-brand-400 text-sm" id="valBufferQueue">0 Pending in SQLite</span>
+            <span class="text-slate-400 block text-[10px] mt-0.5">Zero-loss Offline Buffer</span>
+          </div>
+        </div>
+
+        <!-- PLC Tags Table -->
+        <div class="overflow-x-auto rounded-lg border border-surface-700/60 max-h-80 overflow-y-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-surface-800/80 uppercase text-[10px] text-slate-400 border-b border-surface-700 sticky top-0">
+              <tr>
+                <th class="px-3 py-2">Tag Name</th>
+                <th class="px-3 py-2">Address</th>
+                <th class="px-3 py-2">Type</th>
+                <th class="px-3 py-2">Value</th>
+                <th class="px-3 py-2">Unit</th>
+                <th class="px-3 py-2">Quality</th>
+              </tr>
+            </thead>
+            <tbody id="plcTagsTableBody" class="divide-y divide-surface-700/50">
+              <!-- Dynamically populated tags -->
+            </tbody>
+          </table>
         </div>
       </div>
 
