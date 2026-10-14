@@ -133,17 +133,30 @@ LAN 2 (Internet / API):  eth1
 
 ---
 
-### ขั้นตอนที่ 5: การตั้งค่าไฟล์ `config_plc.json`
+---
+
+### ขั้นตอนที่ 5: การตั้งค่าไฟล์ `config_plc.json` (Device 1 vs Device 2)
+
+> [!IMPORTANT]
+> **ทั้ง Device 1 และ Device 2 ใช้ Source Code เดียวกัน 100%** ต่างกันแค่ค่าคอนฟิกและ IP เท่านั้น
+
 เปิดแก้ไขไฟล์ตั้งค่า:
 ```bash
 nano config_plc.json
 ```
-ตั้งค่าข้อมูลของเครื่อง:
+
+#### 📌 สำหรับเครื่องที่ 1: `gse-proto-1` (Master Gateway)
 ```json
 {
   "deviceId": "gse-proto-1",
-  "deviceName": "Edge Prototype Gateway 1",
+  "deviceName": "Edge Prototype Gateway 1 (Master)",
   "serialNumber": "auto",
+  "network": {
+    "lan1_plc_interface": "eth0",
+    "lan1_plc_ip": "192.168.0.50",
+    "lan2_internet_interface": "eth1",
+    "lan2_internet_ip": "192.168.1.100"
+  },
   "api": {
     "telemetryUrl": "http://YOUR_API_SERVER/api/telemetry",
     "batchTelemetryUrl": "http://YOUR_API_SERVER/api/telemetry/batch",
@@ -157,6 +170,43 @@ nano config_plc.json
   }
 }
 ```
+
+#### 📌 สำหรับเครื่องที่ 2: `gse-proto-2` (Redundant Backup)
+```json
+{
+  "deviceId": "gse-proto-2",
+  "deviceName": "Edge Prototype Gateway 2 (Backup)",
+  "serialNumber": "auto",
+  "network": {
+    "lan1_plc_interface": "eth0",
+    "lan1_plc_ip": "192.168.0.51",
+    "lan2_internet_interface": "eth1",
+    "lan2_internet_ip": "192.168.1.101"
+  },
+  "api": {
+    "telemetryUrl": "http://YOUR_API_SERVER/api/telemetry",
+    "batchTelemetryUrl": "http://YOUR_API_SERVER/api/telemetry/batch",
+    "heartbeatUrl": "http://YOUR_API_SERVER/api/heartbeat",
+    "transmissionIntervalSec": 3600,
+    "heartbeatIntervalSec": 30
+  },
+  "plc": {
+    "ip": "192.168.0.10",
+    "simulate": false
+  }
+}
+```
+
+#### 📊 ตารางเปรียบเทียบการตั้งค่า (Configuration Summary):
+| รายการ | เครื่องที่ 1 (`gse-proto-1`) | เครื่องที่ 2 (`gse-proto-2`) | หมายเหตุ |
+| :--- | :--- | :--- | :--- |
+| **บทบาท** | Master Gateway (ตัวหลัก) | Redundant Backup (ตัวสำรอง) | รันโค้ดเดียวกัน 100% |
+| **`deviceId`** | `gse-proto-1` | `gse-proto-2` | ใช้ระบุตัวตนใน REST API |
+| **`serialNumber`** | `"auto"` | `"auto"` | แต่ละบอร์ดจะอ่าน CPU Serial ไม่ซ้ำกัน |
+| **`lan1_plc_ip`** | `192.168.0.50` | `192.168.0.51` | ต้องไม่ชนกันในวง PLC |
+| **`lan2_internet_ip`** | `192.168.1.100` | `192.168.1.101` | หรือใช้ DHCP ตามระบบโรงงาน |
+| **PLC Target** | `192.168.0.10:102` | `192.168.0.10:102` | ชี้เข้าหา PLC S7-1200 ตัวเดียวกัน |
+
 
 ---
 
