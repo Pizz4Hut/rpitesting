@@ -95,12 +95,40 @@ ssh groundshift_supreme_admin@gse-proto-2.local
 *(กรอกรหัสผ่าน: `abcd1234#`)*
 
 เมื่อล็อกอินสำเร็จ ให้รันคำสั่งติดตั้งโปรเจกต์:
-```bash
-# 0. ติดตั้ง Git ก่อนเป็นอันดับแรก (จำเป็นสำหรับ Raspberry Pi OS ที่เพิ่งลงใหม่)
-sudo apt update && sudo apt install -y git
 
-# 1. Clone คลังโปรเจกต์
-git clone https://github.com/Pizz4Hut/edge-prototype-gen-1.git
+#### 🔐 4.1 ติดตั้ง Git และตั้งค่า Deploy Key (สำหรับคลัง Private Repository)
+เนื่องจากโปรเจกต์เป็นงานความปลอดภัยสูงที่ต้องรักษาเป็น **Private Repository** แนะนำให้เชื่อมต่อผ่าน **Deploy Key (Read-only)** ตามมาตรฐานสากล:
+
+1. **ติดตั้ง Git:**
+   ```bash
+   sudo apt update && sudo apt install -y git
+   ```
+
+2. **สร้าง SSH Key ประจำตัวบอร์ด Pi:**
+   ```bash
+   ssh-keygen -t ed25519 -C "rpi-gateway" -N "" -f ~/.ssh/id_ed25519
+   ```
+
+3. **ดูกุญแจ Public Key เพื่อนำไปใส่ใน GitHub:**
+   ```bash
+   cat ~/.ssh/id_ed25519.pub
+   ```
+   *(คัดลอกข้อความทั้งหมดที่ขึ้นต้นด้วย `ssh-ed25519 AAAA...... rpi-gateway`)*
+
+4. **เพิ่ม Deploy Key ใน GitHub:**
+   * เปิดเบราว์เซอร์ไปที่: [github.com/Pizz4Hut/edge-prototype-gen-1/settings/keys](https://github.com/Pizz4Hut/edge-prototype-gen-1/settings/keys)
+   * คลิก **Add deploy key**
+   * **Title:** ใส่ชื่อเครื่อง เช่น `gse-proto-1` (หรือ `gse-proto-2`)
+   * **Key:** วางข้อความกุญแจที่คัดลอกมา
+   * ⚠️ **ไม่ต้องติ๊ก Allow write access** *(ปล่อยว่างไว้ เพื่อให้บอร์ดมีสิทธิ์แค่ Read-only ปลอดภัยสูงสุด 100%)*
+   * คลิก **Add key**
+
+---
+
+#### 🚀 4.2 ดาวน์โหลดและติดตั้ง Edge Gateway
+```bash
+# 1. Clone คลังโปรเจกต์ผ่าน SSH (ปลอดภัยและไม่ต้องใส่รหัสผ่าน)
+git clone git@github.com:Pizz4Hut/edge-prototype-gen-1.git
 cd edge-prototype-gen-1/pi-client
 
 # 2. รันสคริปต์ติดตั้งระบบอัตโนมัติ
