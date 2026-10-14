@@ -67,6 +67,102 @@
    - ประทับรหัส PNR ลงในฟิลด์ `"pnrCode"` และก้อน `"batch"` ของทุกชุดข้อมูลที่ส่งขึ้น API เพื่อใช้ยืนยันความถูกต้อง ป้องกันข้อมูลส่งซ้ำ (Anti-Duplication)
 5. **ระบบตรวจเช็คสุขภาพอัตโนมัติ (Automated Self-Diagnosis & Troubleshooting)**:
    - สแกนสุขภาพระบบ 7 มิติผ่านคำสั่ง `python3 plc_gateway.py --diagnose` รายงานผลด้วย Badge สี [PASS], [WARN], [FAIL] พร้อมคำแนะนำวิธีแก้ปัญหา
+6. **ระบบแปลง Raw Data และสร้าง Web Batch Package (`plc-package`)**:
+   - อ่านและแปลง Raw Memory Bytes (Big-Endian) จากตู้ PLC Siemens S7-1200 ให้เป็นค่าทางวิศวกรรม (Engineering Values) พร้อมกำกับ Sensor Metadata (ID, ชื่อ, ป้ายกำกับ, หน่วย, Address, คุณภาพข้อมูล)
+   - จัดชุดข้อมูลให้อยู่ในโครงสร้าง Batch Payload ตามมาตรฐาน Railway Cloud API (`POST /edge/devices/{deviceId}/runtimes/{runtimeId}/batches`)
+   - คำสั่ง `plc-package` สามารถตรวจสอบตารางแปลงค่า Hex ➔ Value และทดสอบยิงขึ้น Cloud API ได้สดๆ ทันที
+
+---
+
+## 📦 การแปลง Raw Data จาก PLC S7-1200 เป็น Web API Batch Package
+
+### 1. โครงสร้างหน่วยความจำ Big-Endian ของ Siemens S7-1200
+Siemens S7-1200 จัดเก็บข้อมูลใน Data Block (DB1) ด้วยลำดับไบต์แบบ **Big-Endian** (Most Significant Byte มาก่อน):
+* **REAL (Float32 - IEEE 754):** 4 ไบต์ เช่น `42 82 CC D0` ➔ `65.40 °C`
+* **DINT (Signed Int32):** 4 ไบต์ เช่น `00 00 12 D4` ➔ `4,820 pcs`
+* **INT (Signed Int16):** 2 ไบต์ เช่น `06 A4` ➔ `1,700 RPM`
+* **BOOL (Bit):** 1 บิต เช่น `01` ➔ `True (Running)`
+
+### 2. ตารางแมปปิ้งเซนเซอร์ 19 ตัว (Sensor Definitions)
+Gateway ทำการอ่าน Raw Hex Bytes แล้วแปลงพร้อมระบุคำอธิบายเซนเซอร์ดังนี้:
+
+| ID | Sensor Name | Address | Type | ตัวอย่าง Raw Hex | ค่าทางวิศวกรรม (Parsed) | รายละเอียดเซนเซอร์ |
+| :---: | :--- | :---: | :---: | :---: | :---: | :--- |
+| **1** | `spindle_temperature` | `DB1.DBD0` | REAL | `42 82 CC D0` | **65.40 °C** | Main Spindle Temperature |
+| **2** | `motor_current` | `DB1.DBD4` | REAL | `41 92 00 00` | **18.25 A** | Motor Phase Current |
+| **3** | `motor_voltage` | `DB1.DBD8` | REAL | `43 BE 00 00` | **380.00 V** | Supply Bus Voltage |
+| **4** | `hydraulic_pressure` | `DB1.DBD12` | REAL | `42 AE 4C CD` | **87.15 bar** | Hydraulic System Pressure |
+| **5** | `pneumatic_pressure` | `DB1.DBD16` | REAL | `40 C0 00 00` | **6.00 bar** | Pneumatic Air Pressure |
+| **6** | `line_speed` | `DB1.DBD20` | REAL | `41 C8 00 00` | **25.00 m/min** | Conveyor Line Speed |
+| **7** | `vibration_level` | `DB1.DBD24` | REAL | `40 0C CC CD` | **2.20 mm/s** | Spindle Bearing Vibration RMS |
+| **8** | `coolant_flow_rate` | `DB1.DBD28` | REAL | `41 63 33 33` | **14.20 L/min** | Coolant Liquid Flow Rate |
+| **9** | `coolant_temp` | `DB1.DBD32` | REAL | `42 48 00 00` | **50.00 °C** | Coolant Reservoir Temperature |
+| **10** | `total_production_count`| `DB1.DBD36` | DINT | `00 00 12 D4` | **4,820 pcs** | Total Output Production Units |
+| **11** | `good_parts_count` | `DB1.DBD40` | DINT | `00 00 12 BF` | **4,799 pcs** | Passed Quality Units |
+| **12** | `defect_parts_count` | `DB1.DBD44` | DINT | `00 00 00 15` | **21 pcs** | Rejected Defect Units |
+| **13** | `cycle_time_current` | `DB1.DBD48` | REAL | `41 E0 00 00` | **28.00 s** | Current Cycle Duration |
+| **14** | `cycle_time_target` | `DB1.DBD52` | REAL | `41 F0 00 00` | **30.00 s** | Target Standard Cycle Time |
+| **15** | `machine_operating_hours`|`DB1.DBD56` | REAL | `44 9A 40 00` | **1,234.00 h**| Cumulative Machine Running Hours |
+| **16** | `machine_status_running`|`DB1.DBX60.0`| BOOL | `01` | **True** | Machine Run State |
+| **17** | `machine_status_fault` |`DB1.DBX60.1`| BOOL | `00` | **False** | Machine Fault Alarm Active |
+| **18** | `emergency_stop_ok` |`DB1.DBX60.2`| BOOL | `01` | **True** | Emergency Stop Healthy Status |
+| **19** | `active_alarm_code` | `DB1.DBW62` | INT | `00 00` | **0** | Active Fault Alarm Code Number |
+
+### 3. โครงสร้าง Web API Batch Package ที่ส่งขึ้น Railway Cloud
+ข้อมูลถูกห่อเป็น Package ส่งแบบ `POST /edge/devices/{deviceId}/runtimes/{runtimeId}/batches`:
+
+```json
+{
+  "sequence": 1,
+  "sequenceRef": "KXS5H9-1",
+  "collectedAt": "2026-10-14T17:31:21.650Z",
+  "events": [
+    {
+      "timestamp": "2026-10-14T17:31:21.650Z",
+      "payload": {
+        "pnr_code": "KXS5H9",
+        "device_id": "4045f327-2776-4f34-977e-64e307db648f",
+        "device_name": "GSE-PROTO-1",
+        "sensor_count": 19,
+        "sensors": [
+          {
+            "id": 1,
+            "name": "spindle_temperature",
+            "label": "Main Spindle Temperature",
+            "address": "DB1.DBD0",
+            "type": "REAL",
+            "value": 65.4,
+            "unit": "°C",
+            "raw_hex": "4282CCD0",
+            "quality": "GOOD",
+            "timestamp": 1791999081648
+          }
+        ],
+        "tags": {
+          "spindle_temperature": 65.4,
+          "motor_current": 18.25
+        },
+        "system": { "cpuTemp": 45.0, "ramUsage": 25.0, "diskUsage": 92.0 },
+        "plc": { "connected": true, "ip": "192.168.2.2", "port": 102 }
+      }
+    }
+  ]
+}
+```
+
+### 4. คำสั่งเรียกดูและทดสอบ Package บนบอร์ด Pi:
+```bash
+# ตรวจสอบการแปลงค่าจากตู้ PLC จริงหน้างาน
+plc-package
+
+# ดูตัวอย่างการแปลงและโครงสร้าง Package แบบ Dry-run (ไม่ต้องต่อสาย PLC)
+plc-package --sample
+
+# ทดสอบส่ง Package ขึ้น Cloud API สดๆ
+plc-package --send
+# หรือ
+plc-package --sample --send
+```
 
 ---
 

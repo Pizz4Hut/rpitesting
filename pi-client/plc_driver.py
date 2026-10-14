@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
 #!/usr/bin/env python3
 """
 Siemens S7-1200 PLC Communication Driver (Production Physical Mode)
 Connects directly to Siemens S7-1200 PLC via S7comm protocol (TCP Port 102).
-Simulation mode is completely disabled — only real physical PLC data is accepted.
+Converts raw PLC memory bytes (Big-Endian) into engineering sensor values.
+Simulation mode is completely disabled on gateway — only real physical PLC data is accepted.
 """
 
 import time
@@ -21,6 +21,108 @@ try:
     HAS_SNAP7 = True
 except ImportError:
     HAS_SNAP7 = False
+
+
+def unpack_plc_bytes(raw_bytes, data_type="REAL", bit=0):
+    """
+    Converts raw Siemens S7 Big-Endian memory bytes into human-readable engineering values.
+    Supports REAL (Float32), DINT (Int32), DWORD (UInt32), INT (Int16), WORD (UInt16), BOOL, and STRING.
+    """
+    if not raw_bytes:
+        return None
+    data_type = str(data_type).upper()
+    try:
+        if data_type == "REAL":
+            # IEEE 754 32-bit single precision float (Big-Endian)
+            return round(struct.unpack(">f", raw_bytes[:4])[0], 2)
+        elif data_type == "DINT":
+            # 32-bit signed integer
+            return struct.unpack(">i", raw_bytes[:4])[0]
+        elif data_type == "DWORD":
+            # 32-bit unsigned integer
+            return struct.unpack(">I", raw_bytes[:4])[0]
+        elif data_type == "INT":
+            # 16-bit signed integer
+            return struct.unpack(">h", raw_bytes[:2])[0]
+        elif data_type == "WORD":
+            # 16-bit unsigned integer
+            return struct.unpack(">H", raw_bytes[:2])[0]
+        elif data_type == "BOOL":
+            # Bit extraction: bit 0 to 7 of first byte
+            byte_val = raw_bytes[0]
+            return bool((byte_val >> bit) & 1)
+        elif data_type == "STRING":
+            # Siemens S7 String layout: [0]=max_len, [1]=actual_len, [2..]=characters
+            if len(raw_bytes) >= 2:
+                actual_len = raw_bytes[1]
+                return raw_bytes[2:2 + actual_len].decode("latin1", errors="replace")
+            return raw_bytes.decode("latin1", errors="replace")
+        else:
+            return round(struct.unpack(">f", raw_bytes[:4])[0], 2)
+    except Exception as e:
+        logger.warning(f"Failed to unpack {data_type} bytes {raw_bytes.hex()}: {e}")
+        return None
+
+
+def pack_plc_bytes(data_type, value, bit=0):
+    """
+    Packs engineering value into Siemens S7 Big-Endian bytes.
+    Useful for testing, dry-runs, and simulating realistic PLC memory packets.
+    """
+    data_type = str(data_type).upper()
+    try:
+        if data_type == "REAL":
+            return struct.pack(">f", float(value))
+        elif data_type == "DINT":
+            return struct.pack(">i", int(value))
+        elif data_type == "DWORD":
+            return struct.pack(">I", int(value))
+        elif data_type == "INT":
+            return struct.pack(">h", int(value))
+        elif data_type == "WORD":
+            return struct.pack(">H", int(value))
+        elif data_type == "BOOL":
+            val_bit = 1 if bool(value) else 0
+            return bytes([val_bit << bit])
+        elif data_type == "STRING":
+            s_bytes = str(value).encode("latin1", errors="replace")
+            max_len = 254
+            act_len = len(s_bytes)
+            return bytes([max_len, act_len]) + s_bytes
+        else:
+            return struct.pack(">f", float(value))
+    except Exception as e:
+        logger.warning(f"Failed to pack {data_type} value '{value}': {e}")
+        return b"\x00\x00\x00\x00"
+
+
+def format_sensor_reading(tag_config, raw_bytes, parsed_address=None):
+    """
+    Transforms raw memory bytes into an enriched sensor record with full metadata.
+    """
+    name = tag_config.get("name", tag_config.get("address", "unknown"))
+    data_type = tag_config.get("type", "REAL").upper()
+    address = tag_config.get("address", "")
+    bit = 0
+    if parsed_address:
+        bit = parsed_address.get("bit", 0)
+
+    val = unpack_plc_bytes(raw_bytes, data_type, bit=bit)
+    raw_hex = raw_bytes.hex().upper() if raw_bytes else ""
+
+    return {
+        "sensor_id": tag_config.get("id"),
+        "sensor_name": name,
+        "sensor_label": tag_config.get("desc", name),
+        "address": address,
+        "type": data_type,
+        "value": val,
+        "unit": tag_config.get("unit", ""),
+        "raw_hex": raw_hex,
+        "quality": "GOOD" if val is not None else "BAD",
+        "timestamp": int(time.time() * 1000)
+    }
+
 
 
 class S7PLCClient:
@@ -148,39 +250,7 @@ class S7PLCClient:
                 size = tag_config.get("max_length", 254) + 2
 
             raw_bytes = self.client.read_area(area, db_number, start, size)
-
-            # Unpack by data type
-            if data_type == "BOOL":
-                val = bool(get_bool(raw_bytes, 0, parsed["bit"]))
-            elif data_type == "REAL":
-                val = round(get_real(raw_bytes, 0), 2)
-            elif data_type == "INT":
-                val = get_int(raw_bytes, 0)
-            elif data_type == "WORD":
-                val = struct.unpack(">H", raw_bytes[:2])[0]
-            elif data_type == "DINT":
-                val = get_dint(raw_bytes, 0)
-            elif data_type == "DWORD":
-                val = struct.unpack(">I", raw_bytes[:4])[0]
-            elif data_type == "STRING":
-                val = get_string(raw_bytes, 0)
-            else:
-                val = round(get_real(raw_bytes, 0), 2)
-
-            raw_hex = raw_bytes.hex().upper() if raw_bytes else ""
-
-            return {
-                "sensor_id": tag_config.get("id"),
-                "sensor_name": name,
-                "sensor_label": tag_config.get("desc", name),
-                "address": address,
-                "type": data_type,
-                "value": val,
-                "unit": tag_config.get("unit", ""),
-                "raw_hex": raw_hex,
-                "quality": "GOOD",
-                "timestamp": int(time.time() * 1000)
-            }
+            return format_sensor_reading(tag_config, raw_bytes, parsed)
         except Exception as e:
             logger.warning(f"⚠️ [อ่านค่า Tag ไม่สำเร็จ] {name} ({address}): {e}")
             self.connected = False

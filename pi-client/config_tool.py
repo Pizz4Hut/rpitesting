@@ -817,10 +817,11 @@ def interactive_menu():
         print(f"  [{CLR_CYAN}S{CLR_RESET}] 📊 จัดการแท็กและกำหนดเซนเซอร์ (Define Sensors & Memory Map)")
         print(f"  [{CLR_CYAN}7{CLR_RESET}] 🔍 ทดสอบเชื่อมต่อ Live HTTPS Cloud API")
         print(f"  [{CLR_CYAN}8{CLR_RESET}] 🌐 เปิด Web Configurator Dashboard (พอร์ต 8080)")
+        print(f"  [{CLR_CYAN}9{CLR_RESET}] 📦 ตรวจสอบการแปลง Raw Hex Data และ Web Batch Package (plc-package)")
         print(f"  [{CLR_CYAN}R{CLR_RESET}] 🚀 รีสตาร์ท Gateway Service (systemctl restart plc-gateway)")
         print(f"  [{CLR_CYAN}0{CLR_RESET}] ออก (Exit)")
 
-        choice = input(f"\n{CLR_BOLD}Enter choice [0-8, S, R]: {CLR_RESET}").strip().upper()
+        choice = input(f"\n{CLR_BOLD}Enter choice [0-9, S, R]: {CLR_RESET}").strip().upper()
 
         if choice == "0":
             print("Exiting.")
@@ -903,6 +904,16 @@ def interactive_menu():
             input("\nPress Enter to continue...")
         elif choice == "8":
             run_web_server(8080)
+        elif choice == "9":
+            try:
+                from plc_gateway import EdgeGatewayService
+                gw = EdgeGatewayService(config_path=CONFIG_FILE)
+                sub_c = input(f"Select mode: [1] Live Physical PLC, [2] Sample Dry-run (Default 1): ").strip()
+                sample_mode = (sub_c == "2")
+                gw.inspect_package(sample=sample_mode, transmit=False)
+            except Exception as e:
+                print(f"{CLR_RED}Failed to inspect package: {e}{CLR_RESET}")
+            input("\nPress Enter to continue...")
         elif choice == "R":
             restart_gateway_service()
             time.sleep(1)
@@ -912,6 +923,8 @@ def main():
     parser = argparse.ArgumentParser(description="IoT Edge Gateway Configuration & HTTPS Validation Tool")
     parser.add_argument("--view", "-v", action="store_true", help="Display current active configuration")
     parser.add_argument("--sensors", "--list-sensors", action="store_true", help="Display all defined sensors & memory map")
+    parser.add_argument("--package", "--inspect-package", action="store_true", help="Inspect Raw Data Hex -> Parsed Sensors & Web Batch Package")
+    parser.add_argument("--sample", action="store_true", help="Use realistic sample PLC byte packets (for dry-run inspection)")
     parser.add_argument("--test", "-t", action="store_true", help="Test live HTTPS Cloud API connection")
     parser.add_argument("--set-name", "-n", type=str, help="Set Device Name (e.g. GSE-PROTO-1)")
     parser.add_argument("--set-id", "--set-device", type=str, help="Set Cloud Device UUID")
@@ -965,6 +978,12 @@ def main():
 
     if args.sensors:
         display_sensors(cfg)
+        return
+
+    if args.package:
+        from plc_gateway import EdgeGatewayService
+        gw = EdgeGatewayService(config_path=CONFIG_FILE)
+        gw.inspect_package(sample=args.sample, transmit=False)
         return
 
     if args.view:

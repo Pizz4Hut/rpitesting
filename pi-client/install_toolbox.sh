@@ -186,13 +186,22 @@ EOF
 sudo chmod +x /usr/local/bin/plc-config
 echo "  [✓] /usr/local/bin/plc-config     -> Interactive CLI & Web Configurator (Device/API/HTTPS)"
 
-# 14. plc-toolbox: Summary of all commands
+# 14. plc-package: Inspect Raw Data Hex -> Parsed Sensors & Web Batch Package
+sudo tee /usr/local/bin/plc-package > /dev/null <<EOF
+#!/usr/bin/env bash
+python3 "${SCRIPT_DIR}/plc_gateway.py" --config "${CONFIG_FILE}" --package "\$@"
+EOF
+sudo chmod +x /usr/local/bin/plc-package
+echo "  [✓] /usr/local/bin/plc-package   -> Inspect Raw Data Hex & Web Batch Package"
+
+# 15. plc-toolbox: Summary of all commands
 sudo tee /usr/local/bin/plc-toolbox > /dev/null <<EOF
 #!/usr/bin/env bash
 echo "======================================================================"
 echo "🍓 Raspberry Pi IoT Edge Gateway — CLI Toolbox Menu"
 echo "======================================================================"
 echo "  plc-config     : Set Device Name, UUID, API Key, HTTPS URL, or start Web Portal"
+echo "  plc-package    : Inspect Raw Data Hex -> Parsed Sensors & Web Batch Package"
 echo "  plc-info       : Show Device ID, Serial Number, MAC addresses & VPN IP"
 echo "  plc-diagnose   : Run 7-Point automated self-diagnostic health check"
 echo "  plc-test       : Run 1 data acquisition & cloud transmission cycle"

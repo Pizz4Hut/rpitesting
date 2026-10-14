@@ -369,7 +369,18 @@ plc-config --web
    plc-config
    # เลือกเมนู [S] จัดการแท็กและกำหนดเซนเซอร์
    ```
-3. **กำหนดเซนเซอร์ผ่านหน้าเว็บ (Web Configurator):**
+3. **ตรวจสอบการแปลง Raw Data และ Web Batch Package:**
+   ```bash
+   # ตรวจสอบจากตู้ PLC จริง
+   plc-package
+
+   # ดูตัวอย่างการแปลงค่าและ Package แบบจำลอง (Dry-run ไม่ต้องต่อสาย)
+   plc-package --sample
+
+   # ส่ง Package ทดสอบขึ้น Railway Cloud API สดๆ
+   plc-package --send
+   ```
+4. **กำหนดเซนเซอร์ผ่านหน้าเว็บ (Web Configurator):**
    ```bash
    plc-config --web
    # เปิดเบราว์เซอร์ไปที่ http://<ip>:8080 แล้วแก้ไขในตาราง Sensor Definitions & Memory Map ได้ทันที

@@ -23,7 +23,7 @@ import urllib.error
 from datetime import datetime, timezone
 
 # Local modules
-from plc_driver import S7PLCClient
+from plc_driver import S7PLCClient, pack_plc_bytes, unpack_plc_bytes, format_sensor_reading
 from sqlite_buffer import SQLiteBuffer
 from pnr_generator import generate_pnr
 
@@ -268,7 +268,6 @@ class EdgeGatewayService:
         }
         if api_key:
             headers["x-api-key"] = api_key
-            headers["Authorization"] = f"Bearer {api_key}"
 
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
@@ -393,31 +392,28 @@ class EdgeGatewayService:
         tags_data = self.plc.read_all_tags(tag_list)
         return tags_data
 
-    def transmit_telemetry(self):
-        """Gathers PLC tags, system metrics, and sends to REST API. Buffers on failure."""
-        tags_data = self.acquire_plc_data()
-        if not tags_data or len(tags_data) == 0:
-            logger.warning(f"⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.plc.ip}:{self.plc.port}! ให้เชื่อมต่อข้อมูลจาก PLC — ข้ามรอบส่งข้อมูล Telemetry (กำลังรอรับข้อมูลจากตู้ PLC จริง...)")
-            return
-
-        sys_metrics = get_system_metrics()
-        net_status = self.get_network_status()
-        queue_depth = self.buffer.get_queue_depth()
+    def build_batch_payload(self, tags_data, pnr_code=None, current_seq=None):
+        """Builds standardized Edge Runtime Batch JSON Payload."""
+        if current_seq is None:
+            current_seq = self.sequence
+            self.sequence += 1
 
         timestamp_ms = int(time.time() * 1000)
         now_iso = datetime.now(timezone.utc).isoformat()
-        current_seq = self.sequence
-        self.sequence += 1
 
-        with self.buffer._get_connection() as conn:
-            pnr_code = generate_pnr({
-                "org_id": self.org_id,
-                "deviceId": self.device_id,
-                "batch": {
-                    "collected_at": timestamp_ms,
-                    "sequence": current_seq
-                }
-            }, db_conn=conn)
+        if not pnr_code:
+            with self.buffer._get_connection() as conn:
+                pnr_code = generate_pnr({
+                    "org_id": self.org_id,
+                    "deviceId": self.device_id,
+                    "batch": {
+                        "collected_at": timestamp_ms,
+                        "sequence": current_seq
+                    }
+                }, db_conn=conn)
+
+        sys_metrics = get_system_metrics()
+        net_status = self.get_network_status()
 
         sensors_list = []
         tags_dict = {}
@@ -442,7 +438,6 @@ class EdgeGatewayService:
                 tags_dict[tag_name] = t.get("value")
                 sensors_list.append(t)
 
-        # Railway Edge Runtime Batch Schema
         batch_payload = {
             "sequence": current_seq,
             "sequenceRef": f"{pnr_code}-{current_seq}",
@@ -470,6 +465,138 @@ class EdgeGatewayService:
                 }
             ]
         }
+        return batch_payload, pnr_code, current_seq, sensors_list
+
+    def generate_sample_sensor_data(self):
+        """Generates realistic Siemens S7-1200 DB1 raw byte packets and unpacks them for dry-run testing."""
+        presets = {
+            "spindle_temperature": (65.40, "REAL"),
+            "motor_current": (18.25, "REAL"),
+            "motor_voltage": (380.00, "REAL"),
+            "hydraulic_pressure": (87.15, "REAL"),
+            "pneumatic_pressure": (6.00, "REAL"),
+            "line_speed": (25.00, "REAL"),
+            "vibration_level": (2.20, "REAL"),
+            "coolant_flow_rate": (14.20, "REAL"),
+            "spindle_speed": (1700, "INT"),
+            "cycle_time": (28.00, "REAL"),
+            "parts_produced": (4820, "DINT"),
+            "scrap_count": (21, "DINT"),
+            "machine_state": (2, "INT"),
+            "alarm_code": (0, "WORD"),
+            "oil_level": (79.00, "REAL"),
+            "ambient_temperature": (27.50, "REAL"),
+            "ambient_humidity": (60.00, "REAL"),
+            "air_consumption": (200.00, "REAL"),
+            "emergency_stop": (False, "BOOL")
+        }
+
+        sample_tags = {}
+        tag_list = self.config.get("tags", [])
+        for tag in tag_list:
+            name = tag.get("name", "")
+            dtype = tag.get("type", "REAL").upper()
+            val, _ = presets.get(name, (50.0, dtype))
+            raw_b = pack_plc_bytes(dtype, val)
+            sample_tags[name] = format_sensor_reading(tag, raw_b)
+        return sample_tags
+
+    def inspect_package(self, sample=False, transmit=False):
+        """
+        Inspects Raw Data -> Parsed Sensor Values -> Web Batch Package.
+        Displays transformation breakdown table, full JSON payload, and optionally transmits to Cloud API.
+        """
+        print("=" * 110)
+        print("📦 Siemens S7-1200 Raw Data Parser & Web Batch Package Inspector")
+        print("=" * 110)
+        print(f"  Device Name:    {self.device_name}")
+        print(f"  Device UUID:    {self.device_id}")
+        print(f"  Cloud Endpoint: {self.api_base_url}")
+        print(f"  Target PLC:     {self.plc.ip}:{self.plc.port} (Rack {self.plc.rack}, Slot {self.plc.slot})")
+        print(f"  Mode:           {'SAMPLE DRY-RUN (Byte Packets Simulation)' if sample else 'LIVE PHYSICAL PLC'}")
+        print("=" * 110)
+
+        tags_data = {}
+        if not sample:
+            print(f"\n📡 Connecting to physical PLC at {self.plc.ip}:{self.plc.port}...")
+            self.plc.connect()
+            if not self.plc.is_connected():
+                print(f"\n⚠️  [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.plc.ip}:{self.plc.port}! ให้เชื่อมต่อข้อมูลจาก PLC")
+                print("💡 (หากต้องการทดสอบดูตัวอย่างการแปลง Raw Hex และโครงสร้าง Package แบบจำลองก่อนต่อสาย ให้ใช้คำสั่ง: plc-package --sample)\n")
+                return False
+            tags_data = self.acquire_plc_data()
+        else:
+            tags_data = self.generate_sample_sensor_data()
+
+        if not tags_data:
+            print("⚠️  No sensor tag data available.")
+            return False
+
+        # 1. Print Raw Bytes -> Engineering Values Conversion Table
+        print("\n🔍 [Step 1] Raw PLC Memory Bytes (Hex) -> Parsed Engineering Sensor Values:")
+        print("-" * 110)
+        print(f"{'ID':>3} | {'Sensor Name':<22} | {'Address':<11} | {'Type':<5} | {'Raw Hex (S7)':<14} | {'Parsed Value':<18} | {'Description'}")
+        print("-" * 110)
+
+        for tag_name, info in tags_data.items():
+            sid = info.get("sensor_id") or "-"
+            addr = info.get("address") or "-"
+            dtype = info.get("type") or "-"
+            raw_h = info.get("raw_hex") or "-"
+            val = info.get("value")
+            unit = info.get("unit") or ""
+            val_str = f"{val} {unit}".strip()
+            desc = info.get("sensor_label") or tag_name
+            if raw_h and raw_h != "-":
+                raw_fmt = " ".join([raw_h[i:i+2] for i in range(0, len(raw_h), 2)])
+            else:
+                raw_fmt = "-"
+            print(f"{sid:>3} | {tag_name:<22} | {addr:<11} | {dtype:<5} | {raw_fmt:<14} | {val_str:<18} | {desc}")
+        print("-" * 110)
+
+        # 2. Build Web Batch Package
+        batch_payload, pnr_code, seq, sensors = self.build_batch_payload(tags_data)
+
+        print("\n📦 [Step 2] Formatted Web API Batch Package Payload (JSON Schema):")
+        print("-" * 110)
+        print(json.dumps(batch_payload, indent=2, ensure_ascii=False))
+        print("-" * 110)
+        print(f"📊 Package Summary: Sequence #{seq} | PNR: {pnr_code} | Total Defined Sensors: {len(sensors)}")
+
+        # 3. Cloud Transmission (if requested)
+        if transmit:
+            print("\n☁️  [Step 3] Transmitting Batch Package to Cloud API...")
+            if not self.runtime_id:
+                self.start_runtime()
+
+            if self.runtime_id:
+                url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/batches"
+                try:
+                    status_code, body = self.send_http_post(url, batch_payload, timeout=15)
+                    print(f"✅ Cloud API Response: HTTP {status_code} OK")
+                    print(f"   • Runtime ID:   {self.runtime_id}")
+                    print(f"   • Endpoint:     {url}")
+                    print(f"   • PNR Ref:      {pnr_code}-{seq}")
+                    print(f"   • Response:     {body}")
+                except Exception as e:
+                    print(f"❌ Transmission Error: {e}")
+            else:
+                print("❌ Failed to initiate Cloud Runtime session. Check Device UUID / API Key.")
+        else:
+            print("\n💡 (ต้องการส่ง Package นี้ขึ้น Cloud API ทันที? ให้รันคำสั่ง: plc-package --send)")
+
+        print("=" * 110 + "\n")
+        return True
+
+    def transmit_telemetry(self):
+        """Gathers PLC tags, system metrics, and sends to REST API. Buffers on failure."""
+        tags_data = self.acquire_plc_data()
+        if not tags_data or len(tags_data) == 0:
+            logger.warning(f"⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.plc.ip}:{self.plc.port}! ให้เชื่อมต่อข้อมูลจาก PLC — ข้ามรอบส่งข้อมูล Telemetry (กำลังรอรับข้อมูลจากตู้ PLC จริง...)")
+            return
+
+        queue_depth = self.buffer.get_queue_depth()
+        batch_payload, pnr_code, current_seq, sensors_list = self.build_batch_payload(tags_data)
 
         if not self.runtime_id:
             self.start_runtime()
@@ -604,6 +731,9 @@ def main():
     parser.add_argument("--config", default="config_plc.json", help="Path to config_plc.json")
     parser.add_argument("--interval", type=int, default=None, help="Override transmission interval in seconds")
     parser.add_argument("--once", action="store_true", help="Run a single acquisition and transmit cycle, then exit")
+    parser.add_argument("--package", action="store_true", help="Inspect Raw Data Hex -> Parsed Sensors & Web Batch Package")
+    parser.add_argument("--sample", action="store_true", help="Use realistic sample PLC byte packets (for dry-run inspection)")
+    parser.add_argument("--send", "--transmit", dest="send", action="store_true", help="Transmit the inspected batch package directly to Cloud API")
     parser.add_argument("--info", action="store_true", help="Display Device ID, Serial Number, MAC addresses, and exit")
     parser.add_argument("--diagnose", action="store_true", help="Run automated self-diagnosis and troubleshooting checks")
 
@@ -651,6 +781,11 @@ def main():
 
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
+
+    if args.package:
+        gateway.inspect_package(sample=args.sample, transmit=args.send)
+        gateway.stop()
+        return
 
     if args.once:
         gateway.plc.connect()
