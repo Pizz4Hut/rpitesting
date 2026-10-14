@@ -96,6 +96,9 @@ ssh groundshift_supreme_admin@gse-proto-2.local
 
 เมื่อล็อกอินสำเร็จ ให้รันคำสั่งติดตั้งโปรเจกต์:
 ```bash
+# 0. ติดตั้ง Git ก่อนเป็นอันดับแรก (จำเป็นสำหรับ Raspberry Pi OS ที่เพิ่งลงใหม่)
+sudo apt update && sudo apt install -y git
+
 # 1. Clone คลังโปรเจกต์
 git clone https://github.com/Pizz4Hut/edge-prototype-gen-1.git
 cd edge-prototype-gen-1/pi-client

@@ -197,7 +197,14 @@ iface eth1 inet static
 เปิด Terminal บน Raspberry Pi 4 หรือ SSH เข้าไป แล้วรันคำสั่ง:
 
 ```bash
-cd ~/Desktop/"Antigravity Project hub"/pi-client
+# 0. ติดตั้ง Git ก่อนเป็นอันดับแรก (กรณี OS ติดตั้งใหม่ยังไม่มี git)
+sudo apt update && sudo apt install -y git
+
+# 1. Clone คลังโปรเจกต์
+git clone https://github.com/Pizz4Hut/edge-prototype-gen-1.git
+cd edge-prototype-gen-1/pi-client
+
+# 2. รันสคริปต์ติดตั้งระบบอัตโนมัติ
 chmod +x setup_plc_gateway.sh
 ./setup_plc_gateway.sh
 ```
