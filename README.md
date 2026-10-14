@@ -230,26 +230,32 @@ cd ~/edge-prototype-gen-1/pi-client
 
 ### 🛠️ คู่มือการใช้งาน `plc-config` (Interactive CLI & Web Configurator):
 
-เครื่องมือสำหรับตรวจสอบและปรับแต่ง Device ID, API Key, HTTPS URL, Heartbeat/Batch Rate และ PLC IP อย่างสะดวกรวดเร็ว:
+เครื่องมือสำหรับตรวจสอบและปรับแต่ง Device Name, Device ID, API Key, HTTPS URL และ PLC IP อย่างสะดวกรวดเร็ว:
 
 1. **โหมด Interactive เมนู (Wizard):**
    ```bash
    plc-config
    ```
-   * เลือกเมนู `1` เพื่อสลับเป็นโปรไฟล์ **GSE-PROTO-1** ทันที
-   * เลือกเมนู `2` เพื่อสลับเป็นโปรไฟล์ **GSE-PROTO-2** ทันที
-   * เลือกเมนู `3` ถึง `7` เพื่อแก้ไข HTTPS URL, API Key, Device ID, หรือ PLC IP
-   * เลือกเมนู `8` เพื่อทดสอบเชื่อมต่อ **Live HTTPS Cloud API**
-   * เลือกเมนู `9` เพื่อเปิด **Web Configurator Dashboard**
+   * เลือกเมนู `1` เพื่อ**ตั้งชื่ออุปกรณ์ (Device Name)** เช่น `GSE-PROTO-1`
+   * เลือกเมนู `2` เพื่อกำหนดรหัส **Cloud Device UUID**
+   * เลือกเมนู `3` เพื่อกำหนด **Cloud API Key (`x-api-key`)**
+   * เลือกเมนู `4` เพื่อแก้ไข **Cloud HTTPS Base URL**
+   * เลือกเมนู `5` เพื่อกำหนด **PLC IP** (เช่น `192.168.2.2`)
+   * เลือกเมนู `6` เพื่อปรับรอบเวลา **Heartbeat & Batch Rate**
+   * เลือกเมนู `7` เพื่อทดสอบเชื่อมต่อ **Live HTTPS Cloud API**
+   * เลือกเมนู `8` เพื่อเปิด **Web Configurator Dashboard**
    * เลือกเมนู `R` เพื่อรีสตาร์ท Service `plc-gateway`
 
 2. **โหมดคำสั่งด่วน (Command-line Flags):**
    ```bash
-   # สลับโปรไฟล์เป็น GSE-PROTO-1 ทันที
-   plc-config --set-proto1 --restart
+   # ตั้งชื่ออุปกรณ์ (Device Name) แล้วรีสตาร์ททันที
+   plc-config --set-name "GSE-PROTO-1" --restart
 
-   # สลับโปรไฟล์เป็น GSE-PROTO-2 ทันที
-   plc-config --set-proto2 --restart
+   # กำหนดรหัส Cloud Device UUID
+   plc-config --set-id "4045f327-2776-4f34-977e-64e307db648f"
+
+   # กำหนด Cloud API Key
+   plc-config --set-key "gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70"
 
    # ทดสอบการเชื่อมต่อ HTTPS Cloud API สดๆ
    plc-config --test
@@ -259,6 +265,9 @@ cd ~/edge-prototype-gen-1/pi-client
 
    # เปลี่ยน Cloud HTTPS Base URL
    plc-config --set-url "https://epc-edge-api-dev.up.railway.app/api"
+
+   # เปลี่ยน IP ของตู้ PLC
+   plc-config --set-plc-ip "192.168.2.2"
    ```
 
 3. **โหมด Web Configurator (ปรับแต่งผ่านเว็บเบราว์เซอร์):**
@@ -266,7 +275,7 @@ cd ~/edge-prototype-gen-1/pi-client
    plc-config --web
    ```
    * ระบบจะเปิด Web Server พอร์ต `8080` (เช่น `http://192.168.2.4:8080`)
-   * สามารถเปิดผ่าน Browser บนโน้ตบุ๊กหรือมือถือในวง LAN เดียวกันเพื่อกดสลับโปรไฟล์, แก้ไขค่า API Key, และกดทดสอบ HTTPS ได้ด้วยคลิกเดียว
+   * สามารถเปิดผ่าน Browser บนโน้ตบุ๊กหรือมือถือในวง LAN เดียวกันเพื่อกรอก Device Name, API Key, PLC IP และกดทดสอบ HTTPS ได้ด้วยคลิกเดียว
 
 ---
 

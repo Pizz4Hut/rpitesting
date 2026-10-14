@@ -192,7 +192,7 @@ sudo tee /usr/local/bin/plc-toolbox > /dev/null <<EOF
 echo "======================================================================"
 echo "🍓 Raspberry Pi IoT Edge Gateway — CLI Toolbox Menu"
 echo "======================================================================"
-echo "  plc-config     : Configure Device ID, API Key, HTTPS URL, or start Web Portal"
+echo "  plc-config     : Set Device Name, UUID, API Key, HTTPS URL, or start Web Portal"
 echo "  plc-info       : Show Device ID, Serial Number, MAC addresses & VPN IP"
 echo "  plc-diagnose   : Run 7-Point automated self-diagnostic health check"
 echo "  plc-test       : Run 1 data acquisition & cloud transmission cycle"

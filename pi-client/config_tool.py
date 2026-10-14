@@ -2,6 +2,7 @@
 """
 Industrial IoT Edge Gateway - Configuration & HTTPS Cloud Validation Tool
 Supports interactive CLI wizard, command-line arguments, and a lightweight Web UI portal.
+Allows engineers to configure Device Name, Device UUID, API Key, HTTPS URL, and PLC IP.
 """
 
 import os
@@ -18,8 +19,6 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config_plc.json")
-PROTO1_FILE = os.path.join(SCRIPT_DIR, "config_proto1.json")
-PROTO2_FILE = os.path.join(SCRIPT_DIR, "config_proto2.json")
 
 # ANSI Colors
 CLR_RESET = "\033[0m"
@@ -29,18 +28,6 @@ CLR_RED = "\033[1;31m"
 CLR_YELLOW = "\033[1;33m"
 CLR_CYAN = "\033[1;36m"
 CLR_GRAY = "\033[0;90m"
-
-PROTO1_DEFAULTS = {
-    "deviceId": "4045f327-2776-4f34-977e-64e307db648f",
-    "deviceName": "GSE-PROTO-1",
-    "apiKey": "gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70"
-}
-
-PROTO2_DEFAULTS = {
-    "deviceId": "24207b3f-da30-44e7-91f9-8d0067a5d1af",
-    "deviceName": "GSE-PROTO-2",
-    "apiKey": "gs_505a9bb4652c76548e1f2c229ac3055a334b47e38e105192ce7dfb24d0e743c6"
-}
 
 
 def load_config(file_path=CONFIG_FILE):
@@ -135,12 +122,13 @@ def display_config(cfg):
     print(f"\n{CLR_CYAN}{CLR_BOLD}{'='*70}{CLR_RESET}")
     print(f"{CLR_BOLD}⚙️  IoT Edge Gateway — Active Configuration ({CONFIG_FILE}){CLR_RESET}")
     print(f"{CLR_CYAN}{CLR_BOLD}{'='*70}{CLR_RESET}")
-    print(f"  {CLR_BOLD}Device Profile:{CLR_RESET}   {CLR_GREEN}{dev_name}{CLR_RESET} ({dev_id})")
+    print(f"  {CLR_BOLD}Device Name:{CLR_RESET}      {CLR_GREEN}{dev_name}{CLR_RESET}")
+    print(f"  {CLR_BOLD}Device UUID:{CLR_RESET}      {dev_id}")
     print(f"  {CLR_BOLD}Cloud API URL:{CLR_RESET}    {base_url}")
     print(f"  {CLR_BOLD}API Key:{CLR_RESET}          {mask_key(api_key)}")
     print(f"  {CLR_BOLD}Heartbeat Rate:{CLR_RESET}   Every {hb_sec} seconds")
     print(f"  {CLR_BOLD}Batch Rate:{CLR_RESET}       Every {tx_sec} seconds")
-    print(f"  {CLR_BOLD}Target PLC:{CLR_RESET}       {plc_ip}:{plc_port} (S7comm)")
+    print(f"  {CLR_BOLD}Target PLC:{CLR_RESET}       {plc_ip}:{plc_port} (Physical S7comm)")
     print(f"{CLR_CYAN}{'='*70}{CLR_RESET}\n")
 
 
@@ -231,12 +219,6 @@ HTML_PAGE = """<!DOCTYPE html>
       align-items: center;
       gap: 8px;
     }
-    .presets {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-    }
     .btn {
       padding: 10px 18px;
       border-radius: 8px;
@@ -248,8 +230,6 @@ HTML_PAGE = """<!DOCTYPE html>
     }
     .btn-primary { background: var(--primary); color: white; }
     .btn-primary:hover { background: var(--primary-hover); }
-    .btn-preset { background: #334155; color: white; border: 1px solid #475569; }
-    .btn-preset:hover { background: #475569; border-color: #64748b; }
     .btn-success { background: var(--success); color: white; }
     .btn-success:hover { background: #059669; }
     .btn-warning { background: var(--warning); color: #000; }
@@ -323,26 +303,20 @@ HTML_PAGE = """<!DOCTYPE html>
         <p>Siemens S7-1200 & Railway Cloud API Interface</p>
       </div>
       <div>
-        <span class="badge" id="serviceBadge">Checking...</span>
+        <span class="badge" id="serviceBadge">Ready</span>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">⚡ Quick Switch Presets</div>
-      <div class="presets">
-        <button class="btn btn-preset" onclick="applyPreset('proto1')">Load GSE-PROTO-1 Preset</button>
-        <button class="btn btn-preset" onclick="applyPreset('proto2')">Load GSE-PROTO-2 Preset</button>
-      </div>
-
-      <div class="card-title">🌐 Cloud API & Device Credentials</div>
+      <div class="card-title">🏷️ Device Identification & Cloud Connection</div>
       <div class="grid-2">
         <div class="form-group">
-          <label>Device Name</label>
-          <input type="text" id="deviceName" placeholder="GSE-PROTO-1">
+          <label>Device Name (ชื่ออุปกรณ์)</label>
+          <input type="text" id="deviceName" placeholder="e.g. GSE-PROTO-1">
         </div>
         <div class="form-group">
-          <label>Device UUID (Cloud ID)</label>
-          <input type="text" id="deviceId" placeholder="4045f327-...">
+          <label>Device UUID (Cloud Identifier)</label>
+          <input type="text" id="deviceId" placeholder="4045f327-2776-4f34-977e-64e307db648f">
         </div>
       </div>
 
@@ -353,7 +327,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
       <div class="form-group">
         <label>Cloud API Key (x-api-key)</label>
-        <input type="text" id="apiKey" placeholder="gs_...">
+        <input type="text" id="apiKey" placeholder="gs_17ed8df023f46e38...">
       </div>
 
       <div class="grid-2">
@@ -367,7 +341,7 @@ HTML_PAGE = """<!DOCTYPE html>
         </div>
       </div>
 
-      <div class="card-title" style="margin-top: 16px;">🏭 Physical Siemens PLC Connection</div>
+      <div class="card-title" style="margin-top: 16px;">🏭 Physical Siemens S7-1200 PLC Connection</div>
       <div class="grid-2">
         <div class="form-group">
           <label>Siemens PLC IP Address</label>
@@ -390,17 +364,6 @@ HTML_PAGE = """<!DOCTYPE html>
   </div>
 
   <script>
-    const PROTO1 = {
-      deviceName: "GSE-PROTO-1",
-      deviceId: "4045f327-2776-4f34-977e-64e307db648f",
-      apiKey: "gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70"
-    };
-    const PROTO2 = {
-      deviceName: "GSE-PROTO-2",
-      deviceId: "24207b3f-da30-44e7-91f9-8d0067a5d1af",
-      apiKey: "gs_505a9bb4652c76548e1f2c229ac3055a334b47e38e105192ce7dfb24d0e743c6"
-    };
-
     function showResult(text, type) {
       const box = document.getElementById('resultBox');
       box.textContent = text;
@@ -423,14 +386,6 @@ HTML_PAGE = """<!DOCTYPE html>
       } catch (err) {
         showResult('Failed to load configuration: ' + err, 'error');
       }
-    }
-
-    function applyPreset(preset) {
-      const p = preset === 'proto1' ? PROTO1 : PROTO2;
-      document.getElementById('deviceName').value = p.deviceName;
-      document.getElementById('deviceId').value = p.deviceId;
-      document.getElementById('apiKey').value = p.apiKey;
-      showResult(`Applied preset ${p.deviceName}! Click "Save Configuration" or "Save & Restart Gateway" to commit.`, 'info');
     }
 
     function collectForm() {
@@ -511,7 +466,6 @@ HTML_PAGE = """<!DOCTYPE html>
 
 class ConfigWebHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Clean logging
         pass
 
     def do_GET(self):
@@ -623,85 +577,55 @@ def interactive_menu():
 
         display_config(cfg)
         print(f"{CLR_BOLD}Select an action:{CLR_RESET}")
-        print(f"  [{CLR_CYAN}1{CLR_RESET}] Apply Preset: GSE-PROTO-1")
-        print(f"  [{CLR_CYAN}2{CLR_RESET}] Apply Preset: GSE-PROTO-2")
-        print(f"  [{CLR_CYAN}3{CLR_RESET}] Set Cloud HTTPS Base URL")
-        print(f"  [{CLR_CYAN}4{CLR_RESET}] Set Cloud API Key")
-        print(f"  [{CLR_CYAN}5{CLR_RESET}] Set Device UUID & Name")
-        print(f"  [{CLR_CYAN}6{CLR_RESET}] Set Heartbeat & Batch Intervals")
-        print(f"  [{CLR_CYAN}7{CLR_RESET}] Set Target Siemens PLC IP & Port")
-        print(f"  [{CLR_CYAN}8{CLR_RESET}] 🔍 Test Live HTTPS Cloud Connection")
-        print(f"  [{CLR_CYAN}9{CLR_RESET}] 🌐 Launch Web Configurator Dashboard (Port 8080)")
-        print(f"  [{CLR_CYAN}R{CLR_RESET}] 🚀 Restart Gateway Service (systemctl restart plc-gateway)")
-        print(f"  [{CLR_CYAN}0{CLR_RESET}] Exit")
+        print(f"  [{CLR_CYAN}1{CLR_RESET}] 🏷️  ตั้งชื่ออุปกรณ์ (Set Device Name)")
+        print(f"  [{CLR_CYAN}2{CLR_RESET}] 🆔 กำหนดรหัส Cloud Device UUID")
+        print(f"  [{CLR_CYAN}3{CLR_RESET}] 🔑 กำหนด Cloud API Key (x-api-key)")
+        print(f"  [{CLR_CYAN}4{CLR_RESET}] 🌐 กำหนด Cloud HTTPS Base URL")
+        print(f"  [{CLR_CYAN}5{CLR_RESET}] 🏭 กำหนด IP ตู้ Siemens S7-1200 PLC")
+        print(f"  [{CLR_CYAN}6{CLR_RESET}] ⏱️  กำหนดรอบเวลา Heartbeat & Batch Rate")
+        print(f"  [{CLR_CYAN}7{CLR_RESET}] 🔍 ทดสอบเชื่อมต่อ Live HTTPS Cloud API")
+        print(f"  [{CLR_CYAN}8{CLR_RESET}] 🌐 เปิด Web Configurator Dashboard (พอร์ต 8080)")
+        print(f"  [{CLR_CYAN}R{CLR_RESET}] 🚀 รีสตาร์ท Gateway Service (systemctl restart plc-gateway)")
+        print(f"  [{CLR_CYAN}0{CLR_RESET}] ออก (Exit)")
 
-        choice = input(f"\n{CLR_BOLD}Enter choice [0-9, R]: {CLR_RESET}").strip().upper()
+        choice = input(f"\n{CLR_BOLD}Enter choice [0-8, R]: {CLR_RESET}").strip().upper()
 
         if choice == "0":
             print("Exiting.")
             break
         elif choice == "1":
-            cfg["deviceName"] = PROTO1_DEFAULTS["deviceName"]
-            cfg["deviceId"] = PROTO1_DEFAULTS["deviceId"]
-            cfg.setdefault("api", {})["apiKey"] = PROTO1_DEFAULTS["apiKey"]
-            ok, msg = save_config(cfg)
-            if ok:
-                print(f"{CLR_GREEN}✓ Successfully switched to GSE-PROTO-1 profile.{CLR_RESET}")
-            else:
-                print(f"{CLR_RED}{msg}{CLR_RESET}")
-        elif choice == "2":
-            cfg["deviceName"] = PROTO2_DEFAULTS["deviceName"]
-            cfg["deviceId"] = PROTO2_DEFAULTS["deviceId"]
-            cfg.setdefault("api", {})["apiKey"] = PROTO2_DEFAULTS["apiKey"]
-            ok, msg = save_config(cfg)
-            if ok:
-                print(f"{CLR_GREEN}✓ Successfully switched to GSE-PROTO-2 profile.{CLR_RESET}")
-            else:
-                print(f"{CLR_RED}{msg}{CLR_RESET}")
-        elif choice == "3":
-            current = cfg.get("api", {}).get("baseUrl", "")
-            print(f"Current Base URL: {current}")
-            val = input(f"Enter new HTTPS Base URL (press Enter to keep current): ").strip()
-            if val:
-                cfg.setdefault("api", {})["baseUrl"] = val
+            current_name = cfg.get("deviceName", "")
+            print(f"Current Device Name: {CLR_CYAN}{current_name}{CLR_RESET}")
+            new_name = input("Enter new Device Name (e.g. GSE-PROTO-1): ").strip()
+            if new_name:
+                cfg["deviceName"] = new_name
                 save_config(cfg)
-                print(f"{CLR_GREEN}✓ Cloud Base URL updated.{CLR_RESET}")
-        elif choice == "4":
-            current = cfg.get("api", {}).get("apiKey", "")
-            print(f"Current API Key: {mask_key(current)}")
-            val = input(f"Enter new API Key (press Enter to keep current): ").strip()
+                print(f"{CLR_GREEN}✓ Device Name updated to '{new_name}'.{CLR_RESET}")
+        elif choice == "2":
+            current_id = cfg.get("deviceId", "")
+            print(f"Current Device UUID: {CLR_CYAN}{current_id}{CLR_RESET}")
+            new_id = input("Enter new Device UUID: ").strip()
+            if new_id:
+                cfg["deviceId"] = new_id
+                save_config(cfg)
+                print(f"{CLR_GREEN}✓ Device UUID updated to '{new_id}'.{CLR_RESET}")
+        elif choice == "3":
+            current_key = cfg.get("api", {}).get("apiKey", "")
+            print(f"Current API Key: {mask_key(current_key)}")
+            val = input("Enter new API Key (press Enter to keep current): ").strip()
             if val:
                 cfg.setdefault("api", {})["apiKey"] = val
                 save_config(cfg)
                 print(f"{CLR_GREEN}✓ API Key updated.{CLR_RESET}")
-        elif choice == "5":
-            c_id = cfg.get("deviceId", "")
-            c_name = cfg.get("deviceName", "")
-            print(f"Current Device ID:   {c_id}")
-            print(f"Current Device Name: {c_name}")
-            new_id = input(f"Enter new Device ID (press Enter to keep): ").strip()
-            new_name = input(f"Enter new Device Name (press Enter to keep): ").strip()
-            if new_id:
-                cfg["deviceId"] = new_id
-            if new_name:
-                cfg["deviceName"] = new_name
-            if new_id or new_name:
+        elif choice == "4":
+            current_url = cfg.get("api", {}).get("baseUrl", "")
+            print(f"Current Base URL: {current_url}")
+            val = input("Enter new HTTPS Base URL (press Enter to keep current): ").strip()
+            if val:
+                cfg.setdefault("api", {})["baseUrl"] = val
                 save_config(cfg)
-                print(f"{CLR_GREEN}✓ Device credentials updated.{CLR_RESET}")
-        elif choice == "6":
-            hb = cfg.get("api", {}).get("heartbeatIntervalSec", 30)
-            tx = cfg.get("api", {}).get("transmissionIntervalSec", 60)
-            print(f"Current Heartbeat Interval: {hb}s")
-            print(f"Current Batch Interval:     {tx}s")
-            new_hb = input(f"Enter Heartbeat Interval in seconds (default 30): ").strip()
-            new_tx = input(f"Enter Batch Interval in seconds (default 60): ").strip()
-            if new_hb.isdigit():
-                cfg.setdefault("api", {})["heartbeatIntervalSec"] = int(new_hb)
-            if new_tx.isdigit():
-                cfg.setdefault("api", {})["transmissionIntervalSec"] = int(new_tx)
-            save_config(cfg)
-            print(f"{CLR_GREEN}✓ Intervals updated.{CLR_RESET}")
-        elif choice == "7":
+                print(f"{CLR_GREEN}✓ Cloud Base URL updated.{CLR_RESET}")
+        elif choice == "5":
             p_ip = cfg.get("plc", {}).get("ip", "192.168.2.2")
             p_port = cfg.get("plc", {}).get("port", 102)
             print(f"Current PLC Target: {p_ip}:{p_port}")
@@ -713,7 +637,20 @@ def interactive_menu():
                 cfg.setdefault("plc", {})["port"] = int(new_port)
             save_config(cfg)
             print(f"{CLR_GREEN}✓ PLC connection updated.{CLR_RESET}")
-        elif choice == "8":
+        elif choice == "6":
+            hb = cfg.get("api", {}).get("heartbeatIntervalSec", 30)
+            tx = cfg.get("api", {}).get("transmissionIntervalSec", 60)
+            print(f"Current Heartbeat Interval: {hb}s")
+            print(f"Current Batch Interval:     {tx}s")
+            new_hb = input("Enter Heartbeat Interval in seconds (default 30): ").strip()
+            new_tx = input("Enter Batch Interval in seconds (default 60): ").strip()
+            if new_hb.isdigit():
+                cfg.setdefault("api", {})["heartbeatIntervalSec"] = int(new_hb)
+            if new_tx.isdigit():
+                cfg.setdefault("api", {})["transmissionIntervalSec"] = int(new_tx)
+            save_config(cfg)
+            print(f"{CLR_GREEN}✓ Intervals updated.{CLR_RESET}")
+        elif choice == "7":
             base_url = cfg.get("api", {}).get("baseUrl")
             dev_id = cfg.get("deviceId")
             api_key = cfg.get("api", {}).get("apiKey")
@@ -729,8 +666,8 @@ def interactive_menu():
                     print(f"  • Asset Name:    {asset.get('name')} (ID: {asset.get('id')})")
             else:
                 print(f"{CLR_RED}✗ HTTPS Connection Failed ({latency_ms} ms): {result}{CLR_RESET}")
-            input(f"\nPress Enter to continue...")
-        elif choice == "9":
+            input("\nPress Enter to continue...")
+        elif choice == "8":
             run_web_server(8080)
         elif choice == "R":
             restart_gateway_service()
@@ -741,11 +678,10 @@ def main():
     parser = argparse.ArgumentParser(description="IoT Edge Gateway Configuration & HTTPS Validation Tool")
     parser.add_argument("--view", "-v", action="store_true", help="Display current active configuration")
     parser.add_argument("--test", "-t", action="store_true", help="Test live HTTPS Cloud API connection")
-    parser.add_argument("--set-proto1", action="store_true", help="Quick switch to GSE-PROTO-1 profile")
-    parser.add_argument("--set-proto2", action="store_true", help="Quick switch to GSE-PROTO-2 profile")
+    parser.add_argument("--set-name", "-n", type=str, help="Set Device Name (e.g. GSE-PROTO-1)")
+    parser.add_argument("--set-id", "--set-device", type=str, help="Set Cloud Device UUID")
+    parser.add_argument("--set-key", "-k", type=str, help="Set Cloud API Key (x-api-key)")
     parser.add_argument("--set-url", type=str, help="Set Cloud HTTPS Base URL")
-    parser.add_argument("--set-key", type=str, help="Set Cloud API Key")
-    parser.add_argument("--set-device", type=str, help="Set Device UUID")
     parser.add_argument("--set-plc-ip", type=str, help="Set Siemens PLC IP address")
     parser.add_argument("--restart", "-r", action="store_true", help="Restart plc-gateway service")
     parser.add_argument("--web", "-w", action="store_true", help="Launch local Web Configurator portal")
@@ -757,21 +693,17 @@ def main():
     if not cfg:
         sys.exit(1)
 
-    # If flags passed
     modified = False
-    if args.set_proto1:
-        cfg["deviceName"] = PROTO1_DEFAULTS["deviceName"]
-        cfg["deviceId"] = PROTO1_DEFAULTS["deviceId"]
-        cfg.setdefault("api", {})["apiKey"] = PROTO1_DEFAULTS["apiKey"]
-        modified = True
-        print(f"{CLR_GREEN}✓ Preset applied: GSE-PROTO-1{CLR_RESET}")
 
-    if args.set_proto2:
-        cfg["deviceName"] = PROTO2_DEFAULTS["deviceName"]
-        cfg["deviceId"] = PROTO2_DEFAULTS["deviceId"]
-        cfg.setdefault("api", {})["apiKey"] = PROTO2_DEFAULTS["apiKey"]
+    if args.set_name:
+        cfg["deviceName"] = args.set_name
         modified = True
-        print(f"{CLR_GREEN}✓ Preset applied: GSE-PROTO-2{CLR_RESET}")
+        print(f"{CLR_GREEN}✓ Device Name set to: {args.set_name}{CLR_RESET}")
+
+    if args.set_id:
+        cfg["deviceId"] = args.set_id
+        modified = True
+        print(f"{CLR_GREEN}✓ Device UUID set to: {args.set_id}{CLR_RESET}")
 
     if args.set_url:
         cfg.setdefault("api", {})["baseUrl"] = args.set_url
@@ -782,11 +714,6 @@ def main():
         cfg.setdefault("api", {})["apiKey"] = args.set_key
         modified = True
         print(f"{CLR_GREEN}✓ Cloud API Key updated.{CLR_RESET}")
-
-    if args.set_device:
-        cfg["deviceId"] = args.set_device
-        modified = True
-        print(f"{CLR_GREEN}✓ Device ID set to: {args.set_device}{CLR_RESET}")
 
     if args.set_plc_ip:
         cfg.setdefault("plc", {})["ip"] = args.set_plc_ip
@@ -828,7 +755,6 @@ def main():
         run_web_server(args.port)
         return
 
-    # If no flags provided, launch interactive menu
     if len(sys.argv) == 1:
         interactive_menu()
 

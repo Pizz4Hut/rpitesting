@@ -250,7 +250,7 @@ git stash
 git pull origin main
 ./install_toolbox.sh
 ```
-* `plc-config` : ⚙️ เมนูตั้งค่า Device ID, API Key, HTTPS URL และเปิด Web Configurator Dashboard
+* `plc-config` : ⚙️ เมนูตั้งชื่อเครื่อง (Device Name), รหัส UUID, API Key, HTTPS URL และเปิด Web Configurator
 * `plc-toolbox` : แสดงสารบัญคำสั่งลัดทั้งหมด
 * `plc-runtime` : ดูสถานะ Cloud Runtime สดๆ และ Last Seen At จาก Railway API
 * `plc-info` : ดู Hardware Profile, MAC Address, Serial และ Tailscale IP
@@ -265,13 +265,16 @@ git pull origin main
 
 #### ตัวอย่างการใช้งาน `plc-config`:
 ```bash
-# 1. เปิด Interactive Wizard ใน Terminal เพื่อตั้งค่าหรือสลับบอร์ด 1/2
+# 1. เปิด Interactive Wizard ใน Terminal เพื่อตั้งชื่อเครื่องหรือปรับแต่งค่า
 plc-config
 
-# 2. ทดสอบเชื่อมต่อ HTTPS Cloud API สดๆ ทันที
+# 2. ตั้งชื่ออุปกรณ์ (Device Name) แล้วรีสตาร์ท Service ทันที
+plc-config --set-name "GSE-PROTO-1" --restart
+
+# 3. ทดสอบเชื่อมต่อ HTTPS Cloud API สดๆ ทันที
 plc-config --test
 
-# 3. เปิด Web Configurator ปรับแต่งผ่านหน้าเว็บเบราว์เซอร์ (พอร์ต 8080)
+# 4. เปิด Web Configurator ปรับแต่งผ่านหน้าเว็บเบราว์เซอร์ (พอร์ต 8080)
 plc-config --web
 ```
 
