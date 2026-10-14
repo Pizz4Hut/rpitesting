@@ -250,7 +250,7 @@ git stash
 git pull origin main
 ./install_toolbox.sh
 ```
-หลังจากติดตั้งแล้ว สามารถเรียกใช้งานคำสั่งต่อไปนี้ได้ทันทีจากทุกโฟลเดอร์:
+* `plc-config` : ⚙️ เมนูตั้งค่า Device ID, API Key, HTTPS URL และเปิด Web Configurator Dashboard
 * `plc-toolbox` : แสดงสารบัญคำสั่งลัดทั้งหมด
 * `plc-runtime` : ดูสถานะ Cloud Runtime สดๆ และ Last Seen At จาก Railway API
 * `plc-info` : ดู Hardware Profile, MAC Address, Serial และ Tailscale IP
@@ -262,6 +262,18 @@ git pull origin main
 * `plc-buffer` : ตรวจสอบจำนวนข้อมูลที่ค้างใน SQLite Offline Queue
 * `plc-burnin` : รัน Burn-in Stability Test 24 ชั่วโมง
 * `plc-sim` : สตาร์ท PLC Simulator (พอร์ต 102)
+
+#### ตัวอย่างการใช้งาน `plc-config`:
+```bash
+# 1. เปิด Interactive Wizard ใน Terminal เพื่อตั้งค่าหรือสลับบอร์ด 1/2
+plc-config
+
+# 2. ทดสอบเชื่อมต่อ HTTPS Cloud API สดๆ ทันที
+plc-config --test
+
+# 3. เปิด Web Configurator ปรับแต่งผ่านหน้าเว็บเบราว์เซอร์ (พอร์ต 8080)
+plc-config --web
+```
 
 ---
 

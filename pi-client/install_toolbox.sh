@@ -178,12 +178,21 @@ EOF
 sudo chmod +x /usr/local/bin/plc-runtime
 echo "  [✓] /usr/local/bin/plc-runtime    -> Check Live Cloud Runtime Status"
 
-# 13. plc-toolbox: Summary of all commands
+# 13. plc-config: Interactive CLI & Web Configurator for API, Device, and HTTPS
+sudo tee /usr/local/bin/plc-config > /dev/null <<EOF
+#!/usr/bin/env bash
+python3 "${SCRIPT_DIR}/config_tool.py" "\$@"
+EOF
+sudo chmod +x /usr/local/bin/plc-config
+echo "  [✓] /usr/local/bin/plc-config     -> Interactive CLI & Web Configurator (Device/API/HTTPS)"
+
+# 14. plc-toolbox: Summary of all commands
 sudo tee /usr/local/bin/plc-toolbox > /dev/null <<EOF
 #!/usr/bin/env bash
 echo "======================================================================"
 echo "🍓 Raspberry Pi IoT Edge Gateway — CLI Toolbox Menu"
 echo "======================================================================"
+echo "  plc-config     : Configure Device ID, API Key, HTTPS URL, or start Web Portal"
 echo "  plc-info       : Show Device ID, Serial Number, MAC addresses & VPN IP"
 echo "  plc-diagnose   : Run 7-Point automated self-diagnostic health check"
 echo "  plc-test       : Run 1 data acquisition & cloud transmission cycle"

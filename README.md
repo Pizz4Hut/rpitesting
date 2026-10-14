@@ -223,7 +223,9 @@ cd ~/edge-prototype-gen-1/pi-client
 
 | คำสั่งลัด | ความสามารถและหน้าที่ | คำสั่งเดิมที่เทียบเท่า |
 | :--- | :--- | :--- |
+| **`plc-config`** | ⚙️ **ตั้งค่าระบบและทดสอบ HTTPS Cloud:** สลับ Preset 1/2, เปลี่ยน API Key/Device ID/URL หรือเปิด Web Configurator | `python3 config_tool.py` |
 | **`plc-toolbox`** | 🧰 **เปิดสารบัญคำสั่งลัดทั้งหมด:** ดู Cheat Sheet คำสั่งทั้งหมดในหน้าเดียว | เมนูช่วยเหลือ |
+| **`plc-runtime`** | ☁️ **ดูสถานะ Cloud Runtime สดๆ:** เช็คว่า Cloud Railway มองเห็นบอร์ดหรือไม่ | `curl Railway API` |
 | **`plc-info`** | 🏷️ **แสดง Hardware Profile:** MAC Address, Serial, IP วงใน, Tailscale VPN | `python3 plc_gateway.py --info` |
 | **`plc-diagnose`** | 🩺 **รันระบบตรวจสุขภาพ 7 จุด (Self-Diagnosis):** สรุปสถานะเขียว/เหลือง/แดง | `python3 plc_gateway.py --diagnose` |
 | **`plc-test`** | 🚀 **ทดสอบดึงค่าและส่งขึ้น API (1 รอบ):** อ่าน PLC และยิง Cloud ทันที | `python3 plc_gateway.py --once` |
@@ -235,6 +237,46 @@ cd ~/edge-prototype-gen-1/pi-client
 | **`plc-buffer`** | 📦 **เช็คคิว SQLite Offline Buffer:** ดูจำนวนข้อมูลที่ค้างส่งและ PNR ล่าสุด | Query SQLite WAL |
 | **`plc-burnin`** | 🔥 **รัน Burn-in Stability Test 24 ชม.:** ทดสอบความเสถียรตาม TOR 2.3 | `python3 plc_simulator.py` |
 | **`plc-sim`** | 🏭 **สตาร์ทตัวจำลอง Siemens S7-1200 PLC:** รันเซิร์ฟเวอร์ Port 102 บนบอร์ด 3 | `sudo python3 s7_server_simulator.py` |
+
+### 🛠️ คู่มือการใช้งาน `plc-config` (Interactive CLI & Web Configurator):
+
+เครื่องมือสำหรับตรวจสอบและปรับแต่ง Device ID, API Key, HTTPS URL, Heartbeat/Batch Rate และ PLC IP อย่างสะดวกรวดเร็ว:
+
+1. **โหมด Interactive เมนู (Wizard):**
+   ```bash
+   plc-config
+   ```
+   * เลือกเมนู `1` เพื่อสลับเป็นโปรไฟล์ **GSE-PROTO-1** ทันที
+   * เลือกเมนู `2` เพื่อสลับเป็นโปรไฟล์ **GSE-PROTO-2** ทันที
+   * เลือกเมนู `3` ถึง `7` เพื่อแก้ไข HTTPS URL, API Key, Device ID, หรือ PLC IP
+   * เลือกเมนู `8` เพื่อทดสอบเชื่อมต่อ **Live HTTPS Cloud API**
+   * เลือกเมนู `9` เพื่อเปิด **Web Configurator Dashboard**
+   * เลือกเมนู `R` เพื่อรีสตาร์ท Service `plc-gateway`
+
+2. **โหมดคำสั่งด่วน (Command-line Flags):**
+   ```bash
+   # สลับโปรไฟล์เป็น GSE-PROTO-1 ทันที
+   plc-config --set-proto1 --restart
+
+   # สลับโปรไฟล์เป็น GSE-PROTO-2 ทันที
+   plc-config --set-proto2 --restart
+
+   # ทดสอบการเชื่อมต่อ HTTPS Cloud API สดๆ
+   plc-config --test
+
+   # ดูการตั้งค่าปัจจุบันทั้งหมด
+   plc-config --view
+
+   # เปลี่ยน Cloud HTTPS Base URL
+   plc-config --set-url "https://epc-edge-api-dev.up.railway.app/api"
+   ```
+
+3. **โหมด Web Configurator (ปรับแต่งผ่านเว็บเบราว์เซอร์):**
+   ```bash
+   plc-config --web
+   ```
+   * ระบบจะเปิด Web Server พอร์ต `8080` (เช่น `http://192.168.2.4:8080`)
+   * สามารถเปิดผ่าน Browser บนโน้ตบุ๊กหรือมือถือในวง LAN เดียวกันเพื่อกดสลับโปรไฟล์, แก้ไขค่า API Key, และกดทดสอบ HTTPS ได้ด้วยคลิกเดียว
 
 ---
 
