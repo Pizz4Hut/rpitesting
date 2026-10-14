@@ -238,6 +238,69 @@ nohup python3 plc_simulator.py --hours 24 --interval 10 --log burnin_24h.log > b
 tail -f burnin_24h.log
 ```
 
+## 🌐 การติดตั้ง Tailscale VPN สำหรับรีโมทควบคุมระยะไกล (Remote Access & Tailscale SSH)
+
+เพื่อความสะดวกและปลอดภัยในการ SSH เข้าควบคุมบอร์ด Raspberry Pi จากที่ใดก็ได้ในโลก (ไม่ต้องเปิดพอร์ตหรือทำ Port Forwarding):
+
+```bash
+# 1. ติดตั้ง Tailscale บนตัวบอร์ด
+sudo apt update && sudo apt install -y tailscale
+
+# 2. เริ่มเชื่อมต่อและเปิดฟังก์ชัน Tailscale SSH
+sudo tailscale up --ssh
+
+# 3. นำลิงก์ล็อกอินที่ปรากฏบนหน้าจอไปเปิดในเบราว์เซอร์เพื่อยืนยันสิทธิ์
+# 4. เช็คหมายเลข IP ของบอร์ดในวง Tailscale (IP วง 100.x.y.z)
+tailscale ip -4
+tailscale status
+```
+* **การใช้งาน:** เครื่อง Mac หรืออุปกรณ์ที่ติดตั้ง Tailscale ไว้ในบัญชีเดียวกัน สามารถ SSH เข้าหาบอร์ดตรงๆ ได้ทันที:
+  ```bash
+  ssh groundshift_supreme_admin@gse-proto-1
+  ```
+
+---
+
+## 🔬 4 ด่านทดสอบพิสูจน์ระบบเสมือนจริง (Proof of Concept & Stress Testing Guide)
+
+เพื่อพิสูจน์ให้เห็นจริงว่าระบบไม่ได้ทำงานแค่ใน Local และป้องกันข้อกังขาว่าระบบไม่ได้รันฟลุกๆ สามารถรันการทดสอบ 4 ด่านนี้ได้ทันที:
+
+### ด่านที่ 1: พิสูจน์ว่าส่งข้อมูลขึ้น Cloud จริง (ไม่ใช่ Local)
+1. หยิบโทรศัพท์มือถือ ปิด Wi-Fi แล้วเปิดเน็ต 4G/5G
+2. เข้าหน้าเว็บ: [https://rpi11232.netlify.app](https://rpi11232.netlify.app) จะเห็นค่าเซนเซอร์สดๆ จากทั่วทุกมุมโลก
+3. บนบอร์ด Pi สามารถรันคำสั่งเช็คเส้นทางเครือข่ายไปยัง Cloud Server:
+   ```bash
+   traceroute rpi11232.netlify.app
+   ```
+   * จะเห็นเส้นทาง Hop วิ่งข้ามอินเทอร์เน็ตสาธารณะออกไปยัง Global CDN ของ Netlify
+
+### ด่านที่ 2: ดักจับแพ็กเก็ตโปรโตคอล S7comm (TCP Port 102) บนสาย LAN
+พิสูจน์ว่าบอร์ด Gateway คุยกับบอร์ด PLC ด้วยโปรโตคอลอุตสาหกรรม Siemens ข้ามสายแลนจริง:
+```bash
+sudo apt install -y tcpdump
+sudo tcpdump -i eth0 port 102 -n -X -c 5
+```
+* หน้าจอจะแสดงโครงสร้าง Hexadecimal ของ **ISO-on-TCP (COTP)** และ **S7comm Header** วิ่งข้ามสาย LAN จริงทุกรอบการอ่านค่า
+
+### ด่านที่ 3: ทดสอบฉีดค่าจากตู้ PLC แล้วดูว่าหน้าเว็บเปลี่ยนตามทันที
+1. บนบอร์ดที่ 3 (`dgpx@edge-gateway` บอร์ดจำลอง PLC) ให้เปิดไฟล์:
+   ```bash
+   nano s7_server_simulator.py
+   ```
+2. แก้ไขค่า Tag 1 (Spindle Temp) ให้เป็นค่าจำเพาะ เช่น `temp = 99.99`
+3. บันทึกและรันบอร์ด 3 ใหม่: `sudo python3 s7_server_simulator.py`
+4. บนหน้าเว็บ [https://rpi11232.netlify.app](https://rpi11232.netlify.app) จะเห็นว่าค่า **Spindle Temperature เปลี่ยนเป็น `99.99 °C`** ทันทีตามที่ฉีดค่าไว้
+
+### ด่านที่ 4: การทดสอบตัดเน็ตแต่ไม่ตัด PLC (พิสูจน์ Redundancy Store-and-Forward + PNR)
+1. **ดึงสายแลนเส้นที่ต่อจาก Switching Hub ไปยังอินเทอร์เน็ต/Mac ออก** (ให้บอร์ด 1, 2, 3 ยังคุยกันผ่าน Hub ได้ แต่ต่อออกนอกไม่ได้)
+2. รอประมาณ 1-2 นาที แล้วตรวจดูฐานข้อมูลออฟไลน์ในเครื่อง Gateway:
+   ```bash
+   sqlite3 buffer.db "SELECT pnr_code, status, datetime(created_at, 'unixepoch', 'localtime') FROM telemetry_queue;"
+   ```
+   * จะเห็นรายการข้อมูลพร้อมรหัส **PNR Code** ถูกกักเก็บใน SD Card อย่างปลอดภัย
+3. **เสียบสายแลนอินเทอร์เน็ตกลับเข้าที่:**
+   * ภายใน 30 วินาที ตัว Replay Drainer จะดึงข้อมูลย้อนหลังทยอยส่งขึ้น Netlify อัตโนมัติ และเคลียร์คิวในฐานข้อมูลกลับเป็น `0 Pending` โดยไม่มีข้อมูลสูญหาย 100%
+
 ---
 
 ## 📁 รายการไฟล์สำคัญใน `pi-client/`
