@@ -24,6 +24,7 @@ import urllib.error
 # Local modules
 from plc_driver import S7PLCClient
 from sqlite_buffer import SQLiteBuffer
+from pnr_generator import generate_pnr
 
 # Setup logging
 logging.basicConfig(
@@ -183,6 +184,8 @@ class EdgeGatewayService:
         # Device Identification
         self.device_id = self.config.get("deviceId", "edge-prototype-gen1-001")
         self.device_name = self.config.get("deviceName", "Edge Prototype Gen-1")
+        self.org_id = self.config.get("orgId", self.config.get("org_id", "GSE"))
+        self.sequence = 1
 
         conf_sn = self.config.get("serialNumber")
         if not conf_sn or str(conf_sn).strip().lower() in ("auto", "detect", "rpi", ""):
@@ -323,13 +326,35 @@ class EdgeGatewayService:
         net_status = self.get_network_status()
         queue_depth = self.buffer.get_queue_depth()
 
+        # Generate PNR Reference Code according to Crockford Base32 specification
+        timestamp_ms = int(time.time() * 1000)
+        current_seq = self.sequence
+        self.sequence += 1
+
+        with self.buffer._get_connection() as conn:
+            pnr_code = generate_pnr({
+                "org_id": self.org_id,
+                "deviceId": self.device_id,
+                "batch": {
+                    "collected_at": timestamp_ms,
+                    "sequence": current_seq
+                }
+            }, db_conn=conn)
+
         payload = {
+            "pnrCode": pnr_code,
+            "org_id": self.org_id,
+            "batch": {
+                "pnr_code": pnr_code,
+                "sequence": current_seq,
+                "collected_at": timestamp_ms
+            },
             "deviceId": self.device_id,
             "deviceName": self.device_name,
             "serialNumber": self.serial_number,
             "macAddress": self.mac_addresses.get("lan2_internet") or self.mac_addresses.get("lan1_plc"),
             "macAddresses": self.mac_addresses,
-            "timestamp": int(time.time() * 1000),
+            "timestamp": timestamp_ms,
             "system": sys_metrics,
             "plc": {
                 "connected": self.plc.is_connected(),
@@ -349,7 +374,7 @@ class EdgeGatewayService:
         # Try transmitting over HTTP/HTTPS REST API
         try:
             status_code, response_body = self.send_http_post(telemetry_url, payload, timeout=timeout)
-            logger.info(f"✅ Data Transmitted (HTTP {status_code}) | Tags: {len(tags_data)} | Buffer: {queue_depth}")
+            logger.info(f"✅ Data Transmitted (HTTP {status_code}) | PNR: {pnr_code} (Seq #{current_seq}) | Tags: {len(tags_data)} | Buffer: {queue_depth}")
 
             # If success and there are pending backlog items, drain buffer!
             if queue_depth > 0:
@@ -358,9 +383,9 @@ class EdgeGatewayService:
         except Exception as e:
             # REDUNDANCY: Store-and-Forward
             logger.warning(f"⚠️ Network/API Error ({e}). Buffering data to SQLite...")
-            row_id = self.buffer.enqueue(payload)
+            row_id = self.buffer.enqueue(payload, pnr_code=pnr_code)
             new_depth = self.buffer.get_queue_depth()
-            logger.info(f"📦 Record buffered safely into SQLite (ID: {row_id}, Queue depth: {new_depth})")
+            logger.info(f"📦 Record buffered safely into SQLite (PNR: {pnr_code}, ID: {row_id}, Queue depth: {new_depth})")
 
     def drain_offline_buffer(self):
         """Replays offline queued records to REST API in batches once connectivity is restored."""

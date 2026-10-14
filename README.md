@@ -38,6 +38,10 @@
    - **Gateway ⟷ PLC**: สลับบิต Lifebit (`DB1.DBX0.0`) ทุกๆ 5 วินาที เพื่อให้ Ladder Logic ใน PLC ตรวจจับได้ หาก Gateway หยุดทำงาน PLC สามารถส่ง Alarm เตือนหน้าตู้ได้ทันที
 4. **ตรวจจับ Hardware Profile อัตโนมัติ (MAC Address & Serial Number)**:
    - มีคำสั่ง `python3 plc_gateway.py --info` เพื่อแสดง MAC Address ของทั้ง 2 พอร์ต LAN และ Serial Number ที่อ่านจากชิป CPU BCM2711 อัตโนมัติ เพื่อนำไปลงทะเบียน Firewall / MAC Filtering
+5. **ระบบสร้างรหัสอ้างอิง PNR Code (Base32 6 หลัก แบบ Collision-Free)**:
+   - คำนวณรหัส PNR 6 หลัก จากชุดอักขระ 32 ตัว `23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (ตัด 0, 1, O, I ออกเพื่อกันความสับสน)
+   - คำนวณจาก SHA-256 ของ `org_id` + `collected_at` + `sequence` + `nonce` และตรวจสอบความซ้ำซ้อนในฐานข้อมูล SQLite อัตโนมัติ
+   - ประทับรหัส PNR ลงในฟิลด์ `"pnrCode"` และก้อน `"batch"` ของทุกชุดข้อมูลที่ส่งขึ้น API เพื่อใช้ยืนยันความถูกต้อง ป้องกันข้อมูลส่งซ้ำ (Anti-Duplication) และใช้เป็น Transaction Reference ติดตามผล
 
 ---
 
@@ -270,6 +274,7 @@ sudo journalctl -u plc-gateway -f
 | :--- | :--- |
 | `plc_gateway.py` | โปรแกรมหลักของ Gateway (ดึงค่า PLC, ส่ง HTTP API, จัดการ Redundancy & Heartbeat) |
 | `sqlite_buffer.py` | ระบบฐานข้อมูล SQLite Store-and-Forward เก็บข้อมูลออฟไลน์ป้องกันข้อมูลสูญหาย |
+| `pnr_generator.py` | โมดูลคำนวณรหัส PNR 6 หลัก Base32 (ตัด 0, 1, O, I) พร้อมระบบกันชน Collision-Free |
 | `plc_driver.py` | ไดรเวอร์ S7comm รองรับ Siemens S7-1200 และโหมดจำลอง Simulation |
 | `plc_simulator.py` | สคริปต์รัน Burn-in Test 24-72 ชม. และออกรายงานผล HTTP 200 OK |
 | `config_plc.json` | ไฟล์คอนฟิก IP, พอร์ต, ความถี่การส่ง, และตาราง Memory Map 19 Tags |

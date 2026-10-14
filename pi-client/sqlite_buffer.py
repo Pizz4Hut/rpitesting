@@ -30,18 +30,25 @@ class SQLiteBuffer:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS telemetry_queue (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pnr_code TEXT,
                     created_at REAL NOT NULL,
                     payload TEXT NOT NULL,
                     retry_count INTEGER DEFAULT 0,
                     status TEXT DEFAULT 'pending'
                 );
             """)
+            try:
+                conn.execute("ALTER TABLE telemetry_queue ADD COLUMN pnr_code TEXT;")
+            except Exception:
+                pass
             conn.execute("CREATE INDEX IF NOT EXISTS idx_status_created ON telemetry_queue(status, created_at);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_pnr ON telemetry_queue(pnr_code);")
             conn.commit()
 
-    def enqueue(self, payload_dict):
+    def enqueue(self, payload_dict, pnr_code=None):
         """Stores a telemetry record persistently when offline or failed."""
         try:
+            pnr = pnr_code or payload_dict.get("pnrCode") or payload_dict.get("batch", {}).get("pnr_code")
             payload_str = json.dumps(payload_dict)
             now = time.time()
             with self._get_connection() as conn:
@@ -59,8 +66,8 @@ class SQLiteBuffer:
                     logger.warning(f"Buffer exceeded max records ({self.max_records}). Purged 100 oldest records.")
 
                 cursor.execute(
-                    "INSERT INTO telemetry_queue (created_at, payload, retry_count, status) VALUES (?, ?, 0, 'pending');",
-                    (now, payload_str)
+                    "INSERT INTO telemetry_queue (pnr_code, created_at, payload, retry_count, status) VALUES (?, ?, ?, 0, 'pending');",
+                    (pnr, now, payload_str)
                 )
                 conn.commit()
                 return cursor.lastrowid
