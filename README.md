@@ -134,49 +134,33 @@ python3 plc_gateway.py --info
 
 ---
 
-### ขั้นตอนที่ 4: การตั้งค่าไฟล์ `config_plc.json` (Device 1 vs Device 2)
+---
+
+### ขั้นตอนที่ 4: การตั้งค่าเชื่อมต่อ Cloud API (Railway Production Credentials)
+
+ระบบได้เตรียมไฟล์คอนฟิกสำเร็จรูปที่ผูกกับ **Official API Key & Device ID** ของแต่ละบอร์ดไว้เรียบร้อยแล้ว:
 
 #### 📌 สำหรับเครื่องที่ 1: `gse-proto-1` (Master Gateway)
-```json
-{
-  "deviceId": "edge-prototype-gen1-001",
-  "deviceName": "Edge Prototype Gen-1",
-  "serialNumber": "auto",
-  "api": {
-    "telemetryUrl": "https://rpi11232.netlify.app/api/telemetry",
-    "batchTelemetryUrl": "https://rpi11232.netlify.app/api/telemetry/batch",
-    "heartbeatUrl": "https://rpi11232.netlify.app/api/heartbeat",
-    "transmissionIntervalSec": 3600,
-    "heartbeatIntervalSec": 30
-  },
-  "plc": {
-    "ip": "192.168.2.2",
-    "port": 102,
-    "simulate": false
-  }
-}
-```
+* **Device ID:** `4045f327-2776-4f34-977e-64e307db648f`
+* **API Key:** `gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70`
+* **API Base:** `https://epc-edge-api-dev.up.railway.app/api`
+* **คำสั่งเปิดใช้งานบนบอร์ด 1:**
+  ```bash
+  cd ~/edge-prototype-gen-1/pi-client
+  cp config_proto1.json config_plc.json
+  plc-restart
+  ```
 
 #### 📌 สำหรับเครื่องที่ 2: `gse-proto-2` (Redundant Backup)
-```json
-{
-  "deviceId": "gse-proto-2",
-  "deviceName": "Edge Prototype Gateway 2 (Backup)",
-  "serialNumber": "auto",
-  "api": {
-    "telemetryUrl": "https://rpi11232.netlify.app/api/telemetry",
-    "batchTelemetryUrl": "https://rpi11232.netlify.app/api/telemetry/batch",
-    "heartbeatUrl": "https://rpi11232.netlify.app/api/heartbeat",
-    "transmissionIntervalSec": 3600,
-    "heartbeatIntervalSec": 30
-  },
-  "plc": {
-    "ip": "192.168.2.2",
-    "port": 102,
-    "simulate": false
-  }
-}
-```
+* **Device ID:** `24207b3f-da30-44e7-91f9-8d0067a5d1af`
+* **API Key:** `gs_505a9bb4652c76548e1f2c229ac3055a334b47e38e105192ce7dfb24d0e743c6`
+* **API Base:** `https://epc-edge-api-dev.up.railway.app/api`
+* **คำสั่งเปิดใช้งานบนบอร์ด 2:**
+  ```bash
+  cd ~/edge-prototype-gen-1/pi-client
+  cp config_proto2.json config_plc.json
+  plc-restart
+  ```
 
 ---
 

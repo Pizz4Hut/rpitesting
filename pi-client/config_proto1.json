@@ -1,0 +1,62 @@
+{
+  "deviceId": "4045f327-2776-4f34-977e-64e307db648f",
+  "deviceName": "GSE-PROTO-1",
+  "serialNumber": "auto",
+  "repository": "https://github.com/Pizz4Hut/edge-prototype-gen-1.git",
+  "api": {
+    "telemetryUrl": "https://epc-edge-api-dev.up.railway.app/api/devices/telemetry",
+    "batchTelemetryUrl": "https://epc-edge-api-dev.up.railway.app/api/devices/batch",
+    "heartbeatUrl": "https://epc-edge-api-dev.up.railway.app/api/devices/heartbeat",
+    "apiKey": "gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70",
+    "transmissionIntervalSec": 3600,
+    "heartbeatIntervalSec": 30,
+    "httpTimeoutSec": 15
+  },
+  "plc": {
+    "ip": "192.168.2.2",
+    "rack": 0,
+    "slot": 1,
+    "port": 102,
+    "simulate": true,
+    "lifebit": {
+      "enabled": true,
+      "address": "DB1.DBX0.0",
+      "intervalSec": 5
+    }
+  },
+  "network": {
+    "lan1_plc_interface": "eth0",
+    "lan1_plc_ip": "192.168.2.4",
+    "lan2_internet_interface": "wlan0",
+    "lan2_internet_ip": "192.168.1.100",
+    "internetPingTarget": "8.8.8.8"
+  },
+  "redundancy": {
+    "sqliteDbPath": "buffer.db",
+    "maxBufferedRecords": 50000,
+    "retryBackoffInitialSec": 5,
+    "retryBackoffMaxSec": 300,
+    "batchDrainLimit": 20
+  },
+  "tags": [
+    { "id": 1, "name": "spindle_temperature", "address": "DB1.DBD0", "type": "REAL", "unit": "°C", "desc": "Main Spindle Temperature" },
+    { "id": 2, "name": "motor_current", "address": "DB1.DBD4", "type": "REAL", "unit": "A", "desc": "Motor Phase Current" },
+    { "id": 3, "name": "motor_voltage", "address": "DB1.DBD8", "type": "REAL", "unit": "V", "desc": "Supply Bus Voltage" },
+    { "id": 4, "name": "hydraulic_pressure", "address": "DB1.DBD12", "type": "REAL", "unit": "bar", "desc": "Hydraulic System Pressure" },
+    { "id": 5, "name": "pneumatic_pressure", "address": "DB1.DBD16", "type": "REAL", "unit": "bar", "desc": "Pneumatic Air Pressure" },
+    { "id": 6, "name": "line_speed", "address": "DB1.DBD20", "type": "REAL", "unit": "m/min", "desc": "Conveyor Line Speed" },
+    { "id": 7, "name": "vibration_level", "address": "DB1.DBD24", "type": "REAL", "unit": "mm/s", "desc": "Spindle Bearing Vibration RMS" },
+    { "id": 8, "name": "coolant_flow_rate", "address": "DB1.DBD28", "type": "REAL", "unit": "L/min", "desc": "Coolant Liquid Flow Rate" },
+    { "id": 9, "name": "coolant_temp", "address": "DB1.DBD32", "type": "REAL", "unit": "°C", "desc": "Coolant Reservoir Temperature" },
+    { "id": 10, "name": "total_production_count", "address": "DB1.DBD36", "type": "DINT", "unit": "pcs", "desc": "Total Output Production Units" },
+    { "id": 11, "name": "good_parts_count", "address": "DB1.DBD40", "type": "DINT", "unit": "pcs", "desc": "Passed Quality Units" },
+    { "id": 12, "name": "defect_parts_count", "address": "DB1.DBD44", "type": "DINT", "unit": "pcs", "desc": "Rejected Defect Units" },
+    { "id": 13, "name": "cycle_time_current", "address": "DB1.DBD48", "type": "REAL", "unit": "s", "desc": "Current Cycle Duration" },
+    { "id": 14, "name": "cycle_time_target", "address": "DB1.DBD52", "type": "REAL", "unit": "s", "desc": "Target Standard Cycle Time" },
+    { "id": 15, "name": "machine_operating_hours", "address": "DB1.DBD56", "type": "REAL", "unit": "h", "desc": "Cumulative Machine Running Hours" },
+    { "id": 16, "name": "machine_status_running", "address": "DB1.DBX60.0", "type": "BOOL", "unit": "state", "desc": "Machine Run State (1=Running, 0=Stopped)" },
+    { "id": 17, "name": "machine_status_fault", "address": "DB1.DBX60.1", "type": "BOOL", "unit": "state", "desc": "Machine Fault Alarm Active" },
+    { "id": 18, "name": "emergency_stop_ok", "address": "DB1.DBX60.2", "type": "BOOL", "unit": "state", "desc": "Emergency Stop Healthy Status" },
+    { "id": 19, "name": "active_alarm_code", "address": "DB1.DBW62", "type": "INT", "unit": "code", "desc": "Active Fault Alarm Code Number" }
+  ]
+}

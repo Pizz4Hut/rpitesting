@@ -90,8 +90,8 @@ def test_http_url(url, timeout=3.0):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return True, f"HTTP {resp.getcode()}"
     except urllib.error.HTTPError as e:
-        # HTTP 405 (Method Not Allowed) or 400 is fine for a HEAD request to a POST endpoint
-        if e.code in (200, 201, 204, 400, 404, 405):
+        # HTTP 401, 403, 405 (Method Not Allowed) or 400 is fine for a HEAD request to a protected endpoint
+        if e.code in (200, 201, 204, 400, 401, 403, 404, 405):
             return True, f"HTTP {e.code} (Server reachable)"
         return False, f"HTTP {e.code} ({e.reason})"
     except urllib.error.URLError as e:
