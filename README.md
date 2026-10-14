@@ -76,6 +76,12 @@
    - ไม่ต้องตั้งพอร์ตหรือแก้โค้ดให้ยุ่งยาก เพียงกำหนด `"ip": "auto"` ระบบจะสแกนหาตู้และจับคู่เชื่อมต่อให้ทันที
    - หากตู้ PLC เปลี่ยน IP หรือเสียบสลับตู้ ระบบ Failover Discovery จะค้นหาและสลับไปยัง IP ใหม่ให้อัตโนมัติ
    - คำสั่งลัด `plc-discover` สำหรับสแกนค้นหาตู้ Siemens PLC ทุกเครื่องในวง LAN ได้ทันที
+8. **ระบบ Auto-Configuration และ Zero-Touch Plug & Play ขั้นสูง**:
+   - **Auto Hardware Profile Binding**: ตรวจจับ CPU Serial หรือ MAC Address ของบอร์ดอัตโนมัติ ผูก Device UUID และ Cloud API Key ของ `GSE-PROTO-1` / `GSE-PROTO-2` ทันทีแม้จะสลับ MicroSD Card ข้ามเครื่อง
+   - **Auto Network Port Swapping**: ตรวจจับ Default Gateway Route จาก Linux Kernel อัตโนมัติ หากช่างเทคนิคเสียบสาย LAN สลับพอร์ตระหว่าง PLC กับเน็ต ระบบจะสลับบทบาท `eth0 <-> eth1` ให้ทันทีโดยเน็ตไม่หลุด
+   - **Auto Bulk DB Read Optimization**: รวมการอ่าน 19 เซนเซอร์ใน DB1 (0..64 ไบต์) เหลือเพียง 1 S7comm Request เดียว ลดเวลาและลดภาระ CPU ของ PLC ลง 90%
+   - **Auto Event-Driven Emergency Trigger**: ตรวจจับบิตความปลอดภัย (E-Stop Tripped, Machine Fault, Alarm) ทุก 2 วินาที หากเกิดเหตุฉุกเฉินจะข้ามรอบปกติ 60 นาที แล้วส่งข้อมูลขึ้น Cloud API ทันทีแบบ Real-time
+   - **Industrial Safety Guardrails**: ระบบควบคุมความปลอดภัย ไม่เขียนค่าคุมเครื่องจักรลง PLC, ไม่เปลี่ยน IP ของตู้ PLC เอง, และไม่ลบข้อมูลใน SQLite จนกว่า Cloud จะตอบรับ 200/201 (Zero Data Loss)
 
 ---
 
