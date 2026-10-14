@@ -1,6 +1,11 @@
 # 🍓 Raspberry Pi IoT Telemetry Hub & Dashboard
 ## Comprehensive Feature Book & Setup Guidebook
 
+> [!IMPORTANT]
+> **Industrial Production Deployment Notice:**
+> The production edge gateway is the **Siemens S7-1200 Industrial IoT Edge Gateway** streaming directly to the **Railway Cloud API (`https://epc-edge-api-dev.up.railway.app/api`)**.
+> For full physical deployment instructions, dual hardware profiles (`gse-proto-1` & `gse-proto-2`), offline SQLite buffer, and CLI toolbox (`plc-config`, `plc-runtime`, `plc-diagnose`), please refer to **[PLC_GATEWAY_GUIDE.md](file:///Users/simeowntodsawongwat/Desktop/Antigravity%20Project%20hub/PLC_GATEWAY_GUIDE.md)** and **[README.md](file:///Users/simeowntodsawongwat/Desktop/Antigravity%20Project%20hub/README.md)**.
+
 ---
 
 ## 1. Executive Summary & System Architecture

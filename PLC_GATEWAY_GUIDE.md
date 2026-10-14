@@ -28,8 +28,8 @@ flowchart TD
     end
 
     subgraph IT_Zone ["🌐 ระบบคลาวด์ / IT Network (LAN 2 - eth1)"]
-        WebAPI["REST API Endpoint\nHTTP/HTTPS JSON\n(Netlify / Node.js Server)"]
-        WebDash["Web Monitoring Dashboard\n(Chart.js + Status Badges)"]
+        WebAPI["Official Railway REST API\nHTTPS JSON Batches & Heartbeat\n(epc-edge-api-dev.up.railway.app)"]
+        WebDash["Web Monitoring Dashboard\n(Active Devices, Assets, Telemetry)"]
     end
 
     %% Connections

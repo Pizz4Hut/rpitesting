@@ -3,7 +3,7 @@
 
 ระบบ IoT Edge Gateway ออกแบบมาสำหรับติดตั้งบน **Raspberry Pi 4 Model B** เพื่อดึงข้อมูลจาก **PLC Siemens S7-1200** ผ่าน S7comm Protocol (TCP Port 102) และส่งข้อมูลไปยัง **HTTP REST API** ตามข้อกำหนดใน TOR โดยมีระบบ **Redundancy (Store-and-Forward SQLite WAL Mode)**, **Two-way Heartbeat (Gateway ⟷ Server & Gateway ⟷ PLC)**, และ **PNR Reference Code Generation (Crockford Base32 6 หลัก)** ป้องกันข้อมูลสูญหาย 100%
 
-🌐 **Live IoT Cloud Dashboard:** [https://rpi11232.netlify.app](https://rpi11232.netlify.app)
+🌐 **Official Railway Cloud API:** [https://epc-edge-api-dev.up.railway.app/api](https://epc-edge-api-dev.up.railway.app/api)
 
 ---
 
@@ -26,9 +26,9 @@
   192.168.2.4         192.168.2.3
        │                   │
        └─────────┬─────────┘
-                 │ HTTP POST Telemetry & Heartbeat (SSL/TLS)
+                 │ HTTP POST Telemetry Batches & Heartbeat (SSL/TLS)
                  ▼
- ☁️ [ Live Netlify Cloud API: https://rpi11232.netlify.app ]
+ ☁️ [ Official Railway Cloud API: https://epc-edge-api-dev.up.railway.app/api ]
 ```
 
 ---
@@ -294,11 +294,16 @@ sudo journalctl -u plc-gateway -f
   ```bash
   ping -c 3 192.168.2.4
   ```
-* **เช็คสถานะจาก Cloud Server ผ่าน cURL:**
+* **เช็คสถานะจาก Cloud Server ด้วยคำสั่งลัด:**
   ```bash
-  curl -s "https://rpi11232.netlify.app/api/devices/edge-prototype-gen1-001" | grep -o '"status":"[^"]*"'
+  plc-runtime
   ```
-  *(หากเครื่อง 1 ดับเกิน 2 นาที จะตอบกลับมาว่า `"status":"offline"`)*
+* **หรือเช็คตรงผ่าน Railway Cloud REST API:**
+  ```bash
+  curl -s -H "x-api-key: gs_17ed8df023f46e3815c2cefd18ecab43e664bd187244012f0aed619c4e7a5a70" \
+    "https://epc-edge-api-dev.up.railway.app/api/edge/devices/4045f327-2776-4f34-977e-64e307db648f"
+  ```
+  *(จะตอบกลับ JSON ข้อมูลอุปกรณ์ พร้อม Cloud Status เช่น `"ACTIVE"` และ `"last_seen_at"`)*
 
 ### 3. รันระบบตรวจเช็คสุขภาพอัตโนมัติ (Automated Self-Diagnosis):
 ```bash
@@ -377,13 +382,16 @@ tailscale status
 เพื่อพิสูจน์ให้เห็นจริงว่าระบบไม่ได้ทำงานแค่ใน Local และป้องกันข้อกังขาว่าระบบไม่ได้รันฟลุกๆ สามารถรันการทดสอบ 4 ด่านนี้ได้ทันที:
 
 ### ด่านที่ 1: พิสูจน์ว่าส่งข้อมูลขึ้น Cloud จริง (ไม่ใช่ Local)
-1. หยิบโทรศัพท์มือถือ ปิด Wi-Fi แล้วเปิดเน็ต 4G/5G
-2. เข้าหน้าเว็บ: [https://rpi11232.netlify.app](https://rpi11232.netlify.app) จะเห็นค่าเซนเซอร์สดๆ จากทั่วทุกมุมโลก
-3. บนบอร์ด Pi สามารถรันคำสั่งเช็คเส้นทางเครือข่ายไปยัง Cloud Server:
+1. บนบอร์ด Pi สามารถรันคำสั่งเช็คการเชื่อมต่อและการตอบกลับสดๆ จาก Cloud:
    ```bash
-   traceroute rpi11232.netlify.app
+   plc-config --test
    ```
-   * จะเห็นเส้นทาง Hop วิ่งข้ามอินเทอร์เน็ตสาธารณะออกไปยัง Global CDN ของ Netlify
+   * จะแสดงเวลา Latency ในหน่วย ms พร้อมสถานะ `Cloud Status: ACTIVE` และชื่อเครื่องที่ลงทะเบียนไว้
+2. ตรวจสอบเส้นทางเครือข่ายไปยัง Cloud API Server:
+   ```bash
+   traceroute epc-edge-api-dev.up.railway.app
+   ```
+   * จะเห็นเส้นทาง Hop วิ่งข้ามอินเทอร์เน็ตสาธารณะออกไปยัง Cloud Infrastructure
 
 ### ด่านที่ 2: ดักจับแพ็กเก็ตโปรโตคอล S7comm (TCP Port 102) บนสาย LAN
 พิสูจน์ว่าบอร์ด Gateway คุยกับบอร์ด PLC ด้วยโปรโตคอลอุตสาหกรรม Siemens ข้ามสายแลนจริง:
@@ -393,24 +401,23 @@ sudo tcpdump -i eth0 port 102 -n -X -c 5
 ```
 * หน้าจอจะแสดงโครงสร้าง Hexadecimal ของ **ISO-on-TCP (COTP)** และ **S7comm Header** วิ่งข้ามสาย LAN จริงทุกรอบการอ่านค่า
 
-### ด่านที่ 3: ทดสอบฉีดค่าจากตู้ PLC แล้วดูว่าหน้าเว็บเปลี่ยนตามทันที
-1. บนบอร์ดที่ 3 (`dgpx@edge-gateway` บอร์ดจำลอง PLC) ให้เปิดไฟล์:
+### ด่านที่ 3: ทดสอบการอ่านค่าจากตู้ PLC จริง
+1. เมื่อต่อสาย LAN กับตู้ PLC Siemens S7-1200 ที่ IP `192.168.2.2:102`
+2. ทดสอบอ่านค่าและยิง Cloud ทันที 1 รอบ:
    ```bash
-   nano s7_server_simulator.py
+   plc-test
    ```
-2. แก้ไขค่า Tag 1 (Spindle Temp) ให้เป็นค่าจำเพาะ เช่น `temp = 99.99`
-3. บันทึกและรันบอร์ด 3 ใหม่: `sudo python3 s7_server_simulator.py`
-4. บนหน้าเว็บ [https://rpi11232.netlify.app](https://rpi11232.netlify.app) จะเห็นว่าค่า **Spindle Temperature เปลี่ยนเป็น `99.99 °C`** ทันทีตามที่ฉีดค่าไว้
+3. ผลลัพธ์ในหน้าจอจะแสดงค่าจริง 19 Tags ที่อ่านได้จาก Data Block พร้อมส่ง Telemetry Batch และ Heartbeat ขึ้น Cloud สำเร็จ (`HTTP 201 Created` / `HTTP 200 OK`)
 
 ### ด่านที่ 4: การทดสอบตัดเน็ตแต่ไม่ตัด PLC (พิสูจน์ Redundancy Store-and-Forward + PNR)
-1. **ดึงสายแลนเส้นที่ต่อจาก Switching Hub ไปยังอินเทอร์เน็ต/Mac ออก** (ให้บอร์ด 1, 2, 3 ยังคุยกันผ่าน Hub ได้ แต่ต่อออกนอกไม่ได้)
-2. รอประมาณ 1-2 นาที แล้วตรวจดูฐานข้อมูลออฟไลน์ในเครื่อง Gateway:
+1. **ดึงสายแลนเส้นที่ต่ออินเทอร์เน็ตออก** (ให้บอร์ด Gateway ยังคุยกับ PLC ได้ แต่ต่อออกนอกไม่ได้)
+2. รอประมาณ 1-2 นาที แล้วตรวจดูฐานข้อมูลออฟไลน์ในเครื่อง Gateway ด้วยคำสั่ง:
    ```bash
-   sqlite3 buffer.db "SELECT pnr_code, status, datetime(created_at, 'unixepoch', 'localtime') FROM telemetry_queue;"
+   plc-buffer
    ```
-   * จะเห็นรายการข้อมูลพร้อมรหัส **PNR Code** ถูกกักเก็บใน SD Card อย่างปลอดภัย
+   * จะเห็นรายการข้อมูลพร้อมรหัส **PNR Code** ถูกกักเก็บใน SQLite (`buffer.db`) อย่างปลอดภัย
 3. **เสียบสายแลนอินเทอร์เน็ตกลับเข้าที่:**
-   * ภายใน 30 วินาที ตัว Replay Drainer จะดึงข้อมูลย้อนหลังทยอยส่งขึ้น Netlify อัตโนมัติ และเคลียร์คิวในฐานข้อมูลกลับเป็น `0 Pending` โดยไม่มีข้อมูลสูญหาย 100%
+   * ภายใน 30 วินาที ตัว Replay Drainer จะดึงข้อมูลย้อนหลังทยอยส่งขึ้น Cloud API อัตโนมัติ และเคลียร์คิวในฐานข้อมูลกลับเป็น `0 Pending` โดยไม่มีข้อมูลสูญหาย 100%
 
 ---
 
@@ -418,12 +425,15 @@ sudo tcpdump -i eth0 port 102 -n -X -c 5
 
 | ชื่อไฟล์ | คำอธิบาย |
 | :--- | :--- |
-| `plc_gateway.py` | โปรแกรมหลักของ Gateway (ดึงค่า PLC, ส่ง HTTP API, จัดการ Redundancy & Heartbeat) |
+| `plc_config.py` / `plc-config` | เครื่องมือ Interactive CLI & Web ปรับแต่ง Device ID, API Key, HTTPS URL, สลับโปรไฟล์ Proto 1/2 และทดสอบ Live HTTPS |
+| `install_toolbox.sh` | สคริปต์ติดตั้งคำสั่งลัดระดับระบบ (Global CLI Toolbox ใน `/usr/local/bin`) |
+| `plc_gateway.py` | โปรแกรมหลักของ Gateway (ดึงค่า PLC, ส่ง Cloud Batches & Heartbeat, จัดการ Redundancy) |
+| `plc_driver.py` | ไดรเวอร์ S7comm เชื่อมต่อตู้จริง Siemens S7-1200 (พอร์ต 102) พร้อมระบบตรวจจับสายหลุด |
 | `sqlite_buffer.py` | ระบบฐานข้อมูล SQLite Store-and-Forward เก็บข้อมูลออฟไลน์ป้องกันข้อมูลสูญหาย |
 | `pnr_generator.py` | โมดูลคำนวณรหัส PNR 6 หลัก Base32 (ตัด 0, 1, O, I) พร้อมระบบกันชน Collision-Free |
 | `diagnose.py` | เครื่องมือตรวจเช็คสุขภาพระบบ วินิจฉัยปัญหา และให้คำแนะนำแก้ไขอัตโนมัติ (Self-Diagnosis) |
-| `s7_server_simulator.py`| โปรแกรมเปลี่ยน Raspberry Pi อีกตัวให้กลายเป็น Siemens S7-1200 PLC Server (Port 102) |
-| `plc_driver.py` | ไดรเวอร์ S7comm รองรับ Siemens S7-1200 และโหมดจำลอง Simulation |
-| `plc_simulator.py` | สคริปต์รัน Burn-in Test 24-72 ชม. และออกรายงานผล HTTP 200 OK |
 | `config_plc.json` | ไฟล์คอนฟิก IP, พอร์ต, ความถี่การส่ง, และตาราง Memory Map 19 Tags |
+| `config_proto1.json` | ไฟล์ Preset คอนฟิกสำหรับเครื่อง GSE-PROTO-1 |
+| `config_proto2.json` | ไฟล์ Preset คอนฟิกสำหรับเครื่อง GSE-PROTO-2 |
 | `setup_plc_gateway.sh`| สคริปต์ 1-Click ติดตั้ง Dependencies และลงทะเบียน Service บน Raspberry Pi 4 |
+| `s7_server_simulator.py`| โปรแกรมเปลี่ยน Raspberry Pi บอร์ด 3 ให้กลายเป็น Siemens S7-1200 PLC Server (Port 102) |
