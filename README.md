@@ -10,23 +10,23 @@
 ## 📌 สรุปภาพรวมและผังระบบจริงหน้างาน (Verified Physical Topology)
 
 ```
-       [ Raspberry Pi บอร์ดที่ 3 ]
-       (Siemens S7-1200 PLC Simulator: 192.168.2.2:102)
-                   │
-                   │ สาย LAN (S7comm Protocol)
-                   ▼
+        [ ตู้ PLC Siemens S7-1200 จริง ]
+       (Physical PLC Target: 192.168.2.2:102)
+                    │
+                    │ สาย LAN (S7comm Protocol Port 102)
+                    ▼
 ┌────────────────────────────────────────────────────────┐
 │                   Switching Hub                        │
 └──────┬───────────────────┬──────────────────────┬──────┘
        │                   │                      │
        ▼                   ▼                      ▼
-[ Raspberry Pi 1 ]  [ Raspberry Pi 2 ]    [ Mac Workstation ]
+[ Raspberry Pi 1 ]  [ Raspberry Pi 2 ]    [ Workstation / TIA ]
   gse-proto-1         gse-proto-2         (Monitoring & Dev)
  (Master Gateway)    (Backup Gateway)
   192.168.2.4         192.168.2.3
        │                   │
        └─────────┬─────────┘
-                 │ HTTP POST Telemetry Batches & Heartbeat (SSL/TLS)
+                 │ HTTPS Telemetry Batches & Heartbeat
                  ▼
  ☁️ [ Official Railway Cloud API: https://epc-edge-api-dev.up.railway.app/api ]
 ```
@@ -35,15 +35,18 @@
 
 ## 📋 ข้อมูล Hardware & Network Profile ของอุปกรณ์ที่ทดสอบจริง
 
-| ข้อมูลอุปกรณ์ | บอร์ดที่ 1 (Master) | บอร์ดที่ 2 (Backup) | บอร์ดที่ 3 (PLC Sim) |
+| ข้อมูลอุปกรณ์ | บอร์ดที่ 1 (Master Gateway) | บอร์ดที่ 2 (Backup Gateway) | ตู้ PLC Siemens จริง |
 | :--- | :--- | :--- | :--- |
-| **Hostname** | `gse-proto-1` | `gse-proto-2` | `edge-gateway` |
-| **User Account** | `groundshift_supreme_admin` | `groundshift_supreme_admin` | `dgpx` |
+| **Hostname / ชื่อ** | `gse-proto-1` | `gse-proto-2` | Siemens S7-1200 CPU |
+| **Cloud Device Name**| `GSE-PROTO-1` | `GSE-PROTO-2` | Machine / Line Asset |
+| **Cloud Device UUID**| `4045f327-2776-4f34-977e-64e307db648f` | `24207b3f-da30-44e7-91f9-8d0067a5d1af` | Steam Generator #1 |
+| **API Key (`x-api-key`)** | `gs_17ed8df023f46e38...4e7a5a70` | `gs_505a9bb4652c7654...0e743c6` | - |
+| **User Account** | `groundshift_supreme_admin` | `groundshift_supreme_admin` | - |
 | **IP Address** | `192.168.2.4` | `192.168.2.3` | `192.168.2.2` |
-| **MAC Address** | `98:fe:54:63:34:ca` | `98:fe:54:63:35:a5` | ประจำตัวบอร์ด 3 |
-| **CPU Serial** | `1000000091f9071a` | `100000001b657629` | ชิป BCM2711 |
-| **บทบาทในระบบ** | Master Edge Gateway | Redundant Standby Gateway | Siemens S7-1200 Server |
-| **พอร์ตสื่อสาร** | S7 Port 102 / HTTP Out | S7 Port 102 / HTTP Out | TCP Port 102 (Listen) |
+| **MAC Address** | `98:fe:54:63:34:ca` | `98:fe:54:63:35:a5` | ประจำตัวตู้ PLC |
+| **CPU Hardware Serial** | `1000000091f9071a` | `100000001b657629` | Siemens S7-1200 Firmware |
+| **บทบาทในระบบ** | Master Edge Gateway (Active) | Redundant Standby Gateway (Backup) | Physical Industrial PLC |
+| **พอร์ตสื่อสาร** | S7 Port 102 / HTTPS Out (Railway) | S7 Port 102 / HTTPS Out (Railway) | TCP Port 102 (Listen) |
 
 ---
 
@@ -163,6 +166,9 @@ python3 plc_gateway.py --info
   # 5. นำคอนฟิกไปใช้งานและรีสตาร์ท Service
   cp config_proto1.json config_plc.json
   plc-restart
+
+  # 💡 หรือสั่งคำสั่งเดียวจบผ่าน plc-config:
+  plc-config --set-proto1 --restart
   ```
 
 #### 📌 สำหรับเครื่องที่ 2: `gse-proto-2` (Redundant Backup)
@@ -186,6 +192,9 @@ python3 plc_gateway.py --info
   # 5. นำคอนฟิกไปใช้งานและรีสตาร์ท Service
   cp config_proto2.json config_plc.json
   plc-restart
+
+  # 💡 หรือสั่งคำสั่งเดียวจบผ่าน plc-config:
+  plc-config --set-proto2 --restart
   ```
 
 ---
