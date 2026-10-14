@@ -268,6 +268,29 @@ sudo journalctl -u plc-gateway -f
 
 ---
 
+---
+
+## 🧪 การทำ Raspberry Pi ตัวที่ 3 ให้เป็น Siemens S7-1200 Simulator (Port 102)
+
+ตามข้อกำหนดใน **TOR ข้อ 2.3.1 (Simulation Test)** คุณสามารถนำ Raspberry Pi อีกบอร์ดหนึ่ง (บอร์ดที่ 3) มาทำเป็น **PLC เสมือนจริง** ที่เปิดพอร์ต 102 ให้ Gateway ตัวที่ 1 และ 2 ยิงเข้ามาอ่านค่าได้จริง:
+
+1. **ตั้งค่า IP ของ Pi ตัวที่ 3 ให้เป็นวง PLC:** เช่น `192.168.0.10`
+2. **ติดตั้ง Snap7 บนบอร์ดที่ 3:**
+   ```bash
+   sudo apt update
+   sudo apt install -y python3-pip libsnap7-dev
+   pip3 install python-snap7 --break-system-packages
+   ```
+3. **รันโปรแกรมจำลอง PLC (ต้องใช้ `sudo` เพราะพอร์ต 102 เป็น Well-known Port):**
+   ```bash
+   sudo python3 s7_server_simulator.py
+   ```
+   * ตัวจำลองจะสร้าง **Data Block 1 (DB1)** ขนาด 128 ไบต์
+   * จำลองค่า 19 Tags ทั้งอุณหภูมิ, กระแสไฟ, แรงดัน, ยอดผลิต, และสถานะเครื่องจักรขึ้นมาเสมือนจริงทุก 2 วินาที
+   * อ่านค่า **Gateway Lifebit** จากบอร์ด Gateway ที่สลับบิตเข้ามา เพื่อทดสอบ Watchdog ได้แบบ 100%
+
+---
+
 ## 📁 รายการไฟล์สำคัญใน `pi-client/`
 
 | ชื่อไฟล์ | คำอธิบาย |
@@ -275,6 +298,7 @@ sudo journalctl -u plc-gateway -f
 | `plc_gateway.py` | โปรแกรมหลักของ Gateway (ดึงค่า PLC, ส่ง HTTP API, จัดการ Redundancy & Heartbeat) |
 | `sqlite_buffer.py` | ระบบฐานข้อมูล SQLite Store-and-Forward เก็บข้อมูลออฟไลน์ป้องกันข้อมูลสูญหาย |
 | `pnr_generator.py` | โมดูลคำนวณรหัส PNR 6 หลัก Base32 (ตัด 0, 1, O, I) พร้อมระบบกันชน Collision-Free |
+| `s7_server_simulator.py`| โปรแกรมเปลี่ยน Raspberry Pi อีกตัวให้กลายเป็น Siemens S7-1200 PLC Server (Port 102) |
 | `plc_driver.py` | ไดรเวอร์ S7comm รองรับ Siemens S7-1200 และโหมดจำลอง Simulation |
 | `plc_simulator.py` | สคริปต์รัน Burn-in Test 24-72 ชม. และออกรายงานผล HTTP 200 OK |
 | `config_plc.json` | ไฟล์คอนฟิก IP, พอร์ต, ความถี่การส่ง, และตาราง Memory Map 19 Tags |
