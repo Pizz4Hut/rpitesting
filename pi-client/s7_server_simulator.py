@@ -24,6 +24,16 @@ logger = logging.getLogger("S7ServerSim")
 try:
     import snap7
     from snap7.server import Server
+    try:
+        from snap7.snap7types import srvAreaDB
+    except (ImportError, AttributeError):
+        try:
+            from snap7.types import srvAreaDB
+        except (ImportError, AttributeError):
+            try:
+                from snap7.type import srvAreaDB
+            except (ImportError, AttributeError):
+                srvAreaDB = 0
     HAS_SNAP7_SERVER = True
 except ImportError:
     HAS_SNAP7_SERVER = False
@@ -48,8 +58,8 @@ class S7ServerSimulator:
 
         try:
             self.server = Server()
-            # Register DB area
-            self.server.register_area(snap7.snap7types.srvAreaDB, self.db_number, self.db_data)
+            # Register DB area (srvAreaDB = 0)
+            self.server.register_area(srvAreaDB, self.db_number, self.db_data)
             # Start server (requires root/sudo for port 102)
             self.server.start_to("0.0.0.0", tcp_port=self.port)
             self.running = True
