@@ -419,10 +419,28 @@ class EdgeGatewayService:
                 }
             }, db_conn=conn)
 
+        sensors_list = []
+        tags_dict = {}
         if isinstance(tags_data, dict):
-            tags_dict = {name: info.get("value") for name, info in tags_data.items()}
+            for tag_name, info in tags_data.items():
+                tags_dict[tag_name] = info.get("value")
+                sensors_list.append({
+                    "id": info.get("sensor_id"),
+                    "name": tag_name,
+                    "label": info.get("sensor_label"),
+                    "address": info.get("address"),
+                    "type": info.get("type"),
+                    "value": info.get("value"),
+                    "unit": info.get("unit"),
+                    "raw_hex": info.get("raw_hex"),
+                    "quality": info.get("quality", "GOOD"),
+                    "timestamp": info.get("timestamp")
+                })
         else:
-            tags_dict = {t.get("name", ""): t.get("value") for t in tags_data}
+            for t in tags_data:
+                tag_name = t.get("name", "")
+                tags_dict[tag_name] = t.get("value")
+                sensors_list.append(t)
 
         # Railway Edge Runtime Batch Schema
         batch_payload = {
@@ -436,13 +454,16 @@ class EdgeGatewayService:
                         "pnr_code": pnr_code,
                         "device_id": self.device_id,
                         "device_name": self.device_name,
+                        "sensors": sensors_list,
+                        "sensor_count": len(sensors_list),
                         "tags": tags_dict,
                         "raw_tags": tags_data,
                         "system": sys_metrics,
                         "plc": {
                             "connected": self.plc.is_connected(),
                             "ip": self.plc.ip,
-                            "simulated": self.plc.simulate
+                            "port": self.plc.port,
+                            "lifebit_active": self.config.get("plc", {}).get("lifebit", {}).get("enabled", True)
                         },
                         "network": net_status
                     }
@@ -458,7 +479,7 @@ class EdgeGatewayService:
             url = f"{self.api_base_url}/edge/devices/{self.device_id}/runtimes/{self.runtime_id}/batches"
             try:
                 status_code, response_body = self.send_http_post(url, batch_payload, timeout=15)
-                logger.info(f"✅ Data Transmitted (HTTP {status_code}) | PNR: {pnr_code} (Seq #{current_seq}) | Runtime: {self.runtime_id[:8]}... | Tags: {len(tags_data)} | Buffer: {queue_depth}")
+                logger.info(f"✅ Data Transmitted (HTTP {status_code}) | PNR: {pnr_code} (Seq #{current_seq}) | Runtime: {self.runtime_id[:8]}... | Sensors: {len(sensors_list)} | Buffer: {queue_depth}")
                 transmitted = True
                 if queue_depth > 0:
                     self.drain_offline_buffer()

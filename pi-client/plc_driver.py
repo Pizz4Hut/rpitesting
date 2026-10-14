@@ -167,12 +167,17 @@ class S7PLCClient:
             else:
                 val = round(get_real(raw_bytes, 0), 2)
 
+            raw_hex = raw_bytes.hex().upper() if raw_bytes else ""
+
             return {
-                "name": name,
+                "sensor_id": tag_config.get("id"),
+                "sensor_name": name,
+                "sensor_label": tag_config.get("desc", name),
                 "address": address,
                 "type": data_type,
                 "value": val,
                 "unit": tag_config.get("unit", ""),
+                "raw_hex": raw_hex,
                 "quality": "GOOD",
                 "timestamp": int(time.time() * 1000)
             }

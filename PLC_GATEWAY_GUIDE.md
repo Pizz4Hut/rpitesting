@@ -280,44 +280,100 @@ plc-config --web
 
 ---
 
-## 7. 📡 ตัวอย่าง JSON REST API Payload
+## 7. 📡 ตัวอย่าง JSON Payload (Railway Edge Runtime Telemetry & Sensors Package)
 
-### Data Telemetry Payload (`POST /api/telemetry` ทุกๆ 60 นาที):
+### Data Telemetry Batch Payload (`POST /edge/devices/{deviceId}/runtimes/{runtimeId}/batches`):
+โครงสร้างข้อมูลส่งขึ้น Railway Cloud API มาพร้อมการระบุ **Sensor Definition** ครบถ้วน (ID, ชื่อเซนเซอร์, Label คำอธิบาย, ตำแหน่ง Memory DB, หน่วย Unit, และค่า Raw Hexadecimal จากตู้ PLC):
+
 ```json
 {
-  "deviceId": "edge-gateway-plc-01",
-  "deviceName": "Siemens S7-1200 Edge Gateway",
-  "timestamp": 1773489600000,
-  "system": {
-    "cpuTemp": 48.2,
-    "cpuUsage": 13.5,
-    "ramUsage": 28.4,
-    "diskUsage": 32.1,
-    "uptimeSeconds": 142800
-  },
-  "network": {
-    "lan1_plc": { "interface": "eth0", "ip": "192.168.0.50", "status": "connected" },
-    "lan2_internet": { "interface": "eth1", "ip": "192.168.1.100", "status": "up" }
-  },
-  "redundancy": {
-    "bufferQueueDepth": 0,
-    "storeAndForwardActive": true,
-    "transmissionIntervalSec": 3600
-  },
-  "plc": {
-    "connected": true,
-    "ip": "192.168.0.10",
-    "tagCount": 19,
-    "tags": {
-      "spindle_temperature": { "address": "DB1.DBD0", "type": "REAL", "value": 65.4, "unit": "°C", "quality": "GOOD" },
-      "motor_current": { "address": "DB1.DBD4", "type": "REAL", "value": 14.8, "unit": "A", "quality": "GOOD" },
-      "line_speed": { "address": "DB1.DBD20", "type": "REAL", "value": 45.2, "unit": "m/min", "quality": "GOOD" },
-      "total_production_count": { "address": "DB1.DBD36", "type": "DINT", "value": 4820, "unit": "pcs", "quality": "GOOD" },
-      "machine_status_running": { "address": "DB1.DBX60.0", "type": "BOOL", "value": true, "unit": "state", "quality": "GOOD" }
+  "sequence": 1,
+  "sequenceRef": "J8N7ZQ-1",
+  "collectedAt": "2026-10-15T00:15:00.000Z",
+  "events": [
+    {
+      "timestamp": "2026-10-15T00:15:00.000Z",
+      "payload": {
+        "pnr_code": "J8N7ZQ",
+        "device_id": "4045f327-2776-4f34-977e-64e307db648f",
+        "device_name": "GSE-PROTO-1",
+        "sensor_count": 19,
+        "sensors": [
+          {
+            "id": 1,
+            "name": "spindle_temperature",
+            "label": "Main Spindle Temperature",
+            "address": "DB1.DBD0",
+            "type": "REAL",
+            "value": 65.4,
+            "unit": "°C",
+            "raw_hex": "4282CCD0",
+            "quality": "GOOD",
+            "timestamp": 1773489600000
+          },
+          {
+            "id": 2,
+            "name": "motor_current",
+            "label": "Motor Phase Current",
+            "address": "DB1.DBD4",
+            "type": "REAL",
+            "value": 14.8,
+            "unit": "A",
+            "raw_hex": "416CCE42",
+            "quality": "GOOD",
+            "timestamp": 1773489600000
+          },
+          {
+            "id": 16,
+            "name": "machine_status_running",
+            "label": "Machine Run State (1=Running, 0=Stopped)",
+            "address": "DB1.DBX60.0",
+            "type": "BOOL",
+            "value": true,
+            "unit": "state",
+            "raw_hex": "01",
+            "quality": "GOOD",
+            "timestamp": 1773489600000
+          }
+        ],
+        "tags": {
+          "spindle_temperature": 65.4,
+          "motor_current": 14.8,
+          "machine_status_running": true
+        },
+        "plc": {
+          "connected": true,
+          "ip": "192.168.2.2",
+          "port": 102,
+          "lifebit_active": true
+        },
+        "system": {
+          "cpuTemp": 48.2,
+          "cpuUsage": 13.5,
+          "ramUsage": 28.4,
+          "diskUsage": 32.1
+        }
+      }
     }
-  }
+  ]
 }
 ```
+
+### การตรวจสอบและกำหนดเซนเซอร์ (Define Sensors):
+1. **ดูตารางเซนเซอร์ทั้งหมดใน Terminal:**
+   ```bash
+   plc-config --sensors
+   ```
+2. **จัดการเซนเซอร์ผ่านเมนู:**
+   ```bash
+   plc-config
+   # เลือกเมนู [S] จัดการแท็กและกำหนดเซนเซอร์
+   ```
+3. **กำหนดเซนเซอร์ผ่านหน้าเว็บ (Web Configurator):**
+   ```bash
+   plc-config --web
+   # เปิดเบราว์เซอร์ไปที่ http://<ip>:8080 แล้วแก้ไขในตาราง Sensor Definitions & Memory Map ได้ทันที
+   ```
 
 ### Heartbeat Ping Payload (`POST /api/heartbeat` ทุกๆ 30 วินาที):
 ```json

@@ -2,7 +2,8 @@
 """
 Industrial IoT Edge Gateway - Configuration & HTTPS Cloud Validation Tool
 Supports interactive CLI wizard, command-line arguments, and a lightweight Web UI portal.
-Allows engineers to configure Device Name, Device UUID, API Key, HTTPS URL, and PLC IP.
+Allows engineers to configure Device Name, Device UUID, API Key, HTTPS URL, PLC IP,
+and define/manage all 19+ Siemens S7-1200 Sensor Tags and Memory Mappings.
 """
 
 import os
@@ -118,10 +119,11 @@ def display_config(cfg):
     plc = cfg.get("plc", {})
     plc_ip = plc.get("ip", "(none)")
     plc_port = plc.get("port", 102)
+    tag_count = len(cfg.get("tags", []))
 
-    print(f"\n{CLR_CYAN}{CLR_BOLD}{'='*70}{CLR_RESET}")
+    print(f"\n{CLR_CYAN}{CLR_BOLD}{'='*75}{CLR_RESET}")
     print(f"{CLR_BOLD}⚙️  IoT Edge Gateway — Active Configuration ({CONFIG_FILE}){CLR_RESET}")
-    print(f"{CLR_CYAN}{CLR_BOLD}{'='*70}{CLR_RESET}")
+    print(f"{CLR_CYAN}{CLR_BOLD}{'='*75}{CLR_RESET}")
     print(f"  {CLR_BOLD}Device Name:{CLR_RESET}      {CLR_GREEN}{dev_name}{CLR_RESET}")
     print(f"  {CLR_BOLD}Device UUID:{CLR_RESET}      {dev_id}")
     print(f"  {CLR_BOLD}Cloud API URL:{CLR_RESET}    {base_url}")
@@ -129,7 +131,26 @@ def display_config(cfg):
     print(f"  {CLR_BOLD}Heartbeat Rate:{CLR_RESET}   Every {hb_sec} seconds")
     print(f"  {CLR_BOLD}Batch Rate:{CLR_RESET}       Every {tx_sec} seconds")
     print(f"  {CLR_BOLD}Target PLC:{CLR_RESET}       {plc_ip}:{plc_port} (Physical S7comm)")
-    print(f"{CLR_CYAN}{'='*70}{CLR_RESET}\n")
+    print(f"  {CLR_BOLD}Defined Sensors:{CLR_RESET}   {CLR_GREEN}{tag_count} Sensors configured{CLR_RESET}")
+    print(f"{CLR_CYAN}{'='*75}{CLR_RESET}\n")
+
+
+def display_sensors(cfg):
+    tags = cfg.get("tags", [])
+    print(f"\n{CLR_CYAN}{CLR_BOLD}{'='*85}{CLR_RESET}")
+    print(f"{CLR_BOLD}📊 Defined PLC Sensors & Memory Mappings ({len(tags)} Sensors){CLR_RESET}")
+    print(f"{CLR_CYAN}{CLR_BOLD}{'='*85}{CLR_RESET}")
+    print(f"{CLR_BOLD}{'ID':<4} | {'Sensor Name':<24} | {'DB Address':<12} | {'Type':<6} | {'Unit':<8} | {'Description'}{CLR_RESET}")
+    print(f"{CLR_GRAY}{'-'*85}{CLR_RESET}")
+    for t in tags:
+        t_id = str(t.get("id", "-"))
+        name = t.get("name", "")
+        addr = t.get("address", "")
+        dtype = t.get("type", "")
+        unit = t.get("unit", "")
+        desc = t.get("desc", "")
+        print(f"{t_id:<4} | {CLR_GREEN}{name:<24}{CLR_RESET} | {addr:<12} | {dtype:<6} | {unit:<8} | {desc}")
+    print(f"{CLR_CYAN}{'='*85}{CLR_RESET}\n")
 
 
 def restart_gateway_service():
@@ -180,7 +201,7 @@ HTML_PAGE = """<!DOCTYPE html>
       line-height: 1.5;
       padding: 24px;
     }
-    .container { max-width: 820px; margin: 0 auto; }
+    .container { max-width: 960px; margin: 0 auto; }
     .header {
       background: var(--card);
       border: 1px solid var(--border);
@@ -220,13 +241,13 @@ HTML_PAGE = """<!DOCTYPE html>
       gap: 8px;
     }
     .btn {
-      padding: 10px 18px;
+      padding: 8px 16px;
       border-radius: 8px;
       border: none;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
     .btn-primary { background: var(--primary); color: white; }
     .btn-primary:hover { background: var(--primary-hover); }
@@ -234,6 +255,8 @@ HTML_PAGE = """<!DOCTYPE html>
     .btn-success:hover { background: #059669; }
     .btn-warning { background: var(--warning); color: #000; }
     .btn-warning:hover { background: #d97706; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-danger:hover { background: #dc2626; }
     .form-group { margin-bottom: 18px; }
     label {
       display: block;
@@ -244,7 +267,7 @@ HTML_PAGE = """<!DOCTYPE html>
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    input[type="text"], input[type="number"], input[type="password"] {
+    input[type="text"], input[type="number"], select {
       width: 100%;
       padding: 10px 14px;
       background: #0f172a;
@@ -256,7 +279,7 @@ HTML_PAGE = """<!DOCTYPE html>
       outline: none;
       transition: border-color 0.2s;
     }
-    input:focus { border-color: var(--primary); }
+    input:focus, select:focus { border-color: var(--primary); }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
     .actions {
@@ -293,6 +316,27 @@ HTML_PAGE = """<!DOCTYPE html>
       border: 1px solid var(--primary);
       color: #93c5fd;
     }
+    table.sensor-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.85rem;
+    }
+    table.sensor-table th {
+      background: #0f172a;
+      color: var(--muted);
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    table.sensor-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    table.sensor-table input, table.sensor-table select {
+      padding: 6px 8px;
+      font-size: 0.85rem;
+    }
   </style>
 </head>
 <body>
@@ -300,13 +344,14 @@ HTML_PAGE = """<!DOCTYPE html>
     <div class="header">
       <div>
         <h1>🍓 IoT Edge Gateway Web Configurator</h1>
-        <p>Siemens S7-1200 & Railway Cloud API Interface</p>
+        <p>Siemens S7-1200 Physical PLC & Railway Cloud API Interface</p>
       </div>
       <div>
         <span class="badge" id="serviceBadge">Ready</span>
       </div>
     </div>
 
+    <!-- Device & Cloud Credentials -->
     <div class="card">
       <div class="card-title">🏷️ Device Identification & Cloud Connection</div>
       <div class="grid-2">
@@ -361,13 +406,116 @@ HTML_PAGE = """<!DOCTYPE html>
 
       <div id="resultBox" class="result-box"></div>
     </div>
+
+    <!-- Sensor Definitions & Memory Map -->
+    <div class="card">
+      <div class="card-title" style="justify-content: space-between;">
+        <span>📊 Sensor Definitions & Memory Map (<span id="sensorCount">0</span> Defined)</span>
+        <button class="btn btn-primary" onclick="addSensorRow()">+ Add Sensor Tag</button>
+      </div>
+      <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 12px;">
+        Define which physical sensor each PLC Data Block address maps to, its engineering unit, and description.
+      </p>
+
+      <div style="overflow-x: auto;">
+        <table class="sensor-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">ID</th>
+              <th style="width: 180px;">Sensor Name</th>
+              <th style="width: 110px;">DB Address</th>
+              <th style="width: 90px;">Type</th>
+              <th style="width: 80px;">Unit</th>
+              <th>Description / Label</th>
+              <th style="width: 60px;"></th>
+            </tr>
+          </thead>
+          <tbody id="sensorRows"></tbody>
+        </table>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-success" onclick="saveConfiguration()">💾 Save Sensor Definitions</button>
+        <button class="btn btn-warning" onclick="saveAndRestart()">🚀 Save & Restart Gateway</button>
+      </div>
+    </div>
   </div>
 
   <script>
+    let globalTags = [];
+
     function showResult(text, type) {
       const box = document.getElementById('resultBox');
       box.textContent = text;
       box.className = 'result-box ' + type;
+    }
+
+    function renderSensorRows(tags) {
+      const tbody = document.getElementById('sensorRows');
+      tbody.innerHTML = '';
+      tags.forEach((t, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="number" class="t-id" value="${t.id || (index+1)}" style="width: 45px;"></td>
+          <td><input type="text" class="t-name" value="${t.name || ''}" placeholder="sensor_name"></td>
+          <td><input type="text" class="t-addr" value="${t.address || ''}" placeholder="DB1.DBD0"></td>
+          <td>
+            <select class="t-type">
+              <option value="REAL" ${t.type==='REAL'?'selected':''}>REAL</option>
+              <option value="DINT" ${t.type==='DINT'?'selected':''}>DINT</option>
+              <option value="INT" ${t.type==='INT'?'selected':''}>INT</option>
+              <option value="BOOL" ${t.type==='BOOL'?'selected':''}>BOOL</option>
+              <option value="WORD" ${t.type==='WORD'?'selected':''}>WORD</option>
+              <option value="DWORD" ${t.type==='DWORD'?'selected':''}>DWORD</option>
+              <option value="STRING" ${t.type==='STRING'?'selected':''}>STRING</option>
+            </select>
+          </td>
+          <td><input type="text" class="t-unit" value="${t.unit || ''}" placeholder="°C, A, bar"></td>
+          <td><input type="text" class="t-desc" value="${t.desc || ''}" placeholder="Description"></td>
+          <td style="text-align: center;">
+            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.75rem;" onclick="removeSensorRow(${index})">✕</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('sensorCount').textContent = tags.length;
+    }
+
+    function addSensorRow() {
+      const tbody = document.getElementById('sensorRows');
+      const rows = collectSensors();
+      const nextId = rows.length > 0 ? Math.max(...rows.map(r => r.id || 0)) + 1 : 1;
+      rows.push({
+        id: nextId,
+        name: `sensor_${nextId}`,
+        address: `DB1.DBD${(nextId-1)*4}`,
+        type: 'REAL',
+        unit: '',
+        desc: `Sensor #${nextId}`
+      });
+      renderSensorRows(rows);
+    }
+
+    function removeSensorRow(index) {
+      const rows = collectSensors();
+      rows.splice(index, 1);
+      renderSensorRows(rows);
+    }
+
+    function collectSensors() {
+      const rows = [];
+      const trs = document.querySelectorAll('#sensorRows tr');
+      trs.forEach(tr => {
+        rows.push({
+          id: parseInt(tr.querySelector('.t-id').value, 10) || 1,
+          name: tr.querySelector('.t-name').value.trim(),
+          address: tr.querySelector('.t-addr').value.trim(),
+          type: tr.querySelector('.t-type').value,
+          unit: tr.querySelector('.t-unit').value.trim(),
+          desc: tr.querySelector('.t-desc').value.trim()
+        });
+      });
+      return rows;
     }
 
     async function loadConfig() {
@@ -382,6 +530,8 @@ HTML_PAGE = """<!DOCTYPE html>
         document.getElementById('transmissionIntervalSec').value = (cfg.api && cfg.api.transmissionIntervalSec) || 60;
         document.getElementById('plcIp').value = (cfg.plc && cfg.plc.ip) || '192.168.2.2';
         document.getElementById('plcPort').value = (cfg.plc && cfg.plc.port) || 102;
+        globalTags = cfg.tags || [];
+        renderSensorRows(globalTags);
         document.getElementById('serviceBadge').textContent = 'Config Loaded';
       } catch (err) {
         showResult('Failed to load configuration: ' + err, 'error');
@@ -397,7 +547,8 @@ HTML_PAGE = """<!DOCTYPE html>
         heartbeatIntervalSec: parseInt(document.getElementById('heartbeatIntervalSec').value, 10) || 30,
         transmissionIntervalSec: parseInt(document.getElementById('transmissionIntervalSec').value, 10) || 60,
         plcIp: document.getElementById('plcIp').value.trim(),
-        plcPort: parseInt(document.getElementById('plcPort').value, 10) || 102
+        plcPort: parseInt(document.getElementById('plcPort').value, 10) || 102,
+        tags: collectSensors()
       };
     }
 
@@ -423,7 +574,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
     async function saveConfiguration() {
       const data = collectForm();
-      showResult('Saving configuration...', 'info');
+      showResult('Saving configuration and sensor definitions...', 'info');
       try {
         const res = await fetch('/api/config', {
           method: 'POST',
@@ -432,7 +583,7 @@ HTML_PAGE = """<!DOCTYPE html>
         });
         const out = await res.json();
         if (out.ok) {
-          showResult('✅ Configuration saved successfully to config_plc.json!', 'success');
+          showResult(`✅ Configuration and ${data.tags.length} Sensor Definitions saved successfully to config_plc.json!`, 'success');
         } else {
           showResult('❌ Failed to save: ' + out.error, 'error');
         }
@@ -530,6 +681,8 @@ class ConfigWebHandler(BaseHTTPRequestHandler):
                 cfg["plc"]["ip"] = req_data["plcIp"]
             if "plcPort" in req_data:
                 cfg["plc"]["port"] = int(req_data["plcPort"])
+            if "tags" in req_data and isinstance(req_data["tags"], list):
+                cfg["tags"] = req_data["tags"]
 
             ok, msg = save_config(cfg)
             self.send_response(200 if ok else 500)
@@ -567,6 +720,84 @@ def run_web_server(port=8080):
         httpd.server_close()
 
 
+# --- Sensor Management Interactive Submenu ---
+def sensor_management_menu(cfg):
+    while True:
+        display_sensors(cfg)
+        print(f"{CLR_BOLD}Sensor & Memory Map Actions:{CLR_RESET}")
+        print(f"  [{CLR_CYAN}1{CLR_RESET}] ➕ เพิ่มเซนเซอร์ใหม่ (Define New Sensor)")
+        print(f"  [{CLR_CYAN}2{CLR_RESET}] ✏️  แก้ไขข้อมูลเซนเซอร์ (Edit Sensor Definition)")
+        print(f"  [{CLR_CYAN}3{CLR_RESET}] 🗑️  ลบเซนเซอร์ (Delete Sensor)")
+        print(f"  [{CLR_CYAN}0{CLR_RESET}] ↩️  ย้อนกลับ (Back to Main Menu)")
+
+        sub_choice = input(f"\n{CLR_BOLD}Enter choice [0-3]: {CLR_RESET}").strip()
+        tags = cfg.setdefault("tags", [])
+
+        if sub_choice == "0":
+            break
+        elif sub_choice == "1":
+            print(f"\n{CLR_BOLD}--- Add New Sensor ---{CLR_RESET}")
+            new_id = len(tags) + 1
+            name = input("Enter Sensor Name (e.g. oil_tank_level): ").strip()
+            if not name:
+                print(f"{CLR_RED}Sensor name cannot be empty.{CLR_RESET}")
+                continue
+            addr = input("Enter PLC DB Address (e.g. DB1.DBD64): ").strip()
+            dtype = input("Enter Data Type (REAL, DINT, INT, BOOL, WORD, STRING) [REAL]: ").strip().upper() or "REAL"
+            unit = input("Enter Unit (e.g. °C, bar, mm, L): ").strip()
+            desc = input("Enter Description / Label: ").strip()
+
+            new_tag = {
+                "id": new_id,
+                "name": name,
+                "address": addr,
+                "type": dtype,
+                "unit": unit,
+                "desc": desc
+            }
+            tags.append(new_tag)
+            save_config(cfg)
+            print(f"{CLR_GREEN}✓ Added new sensor '{name}' (ID #{new_id}) successfully!{CLR_RESET}")
+        elif sub_choice == "2":
+            id_str = input("\nEnter Sensor ID or Name to edit: ").strip()
+            matched = None
+            for t in tags:
+                if str(t.get("id")) == id_str or t.get("name") == id_str:
+                    matched = t
+                    break
+            if not matched:
+                print(f"{CLR_RED}Sensor '{id_str}' not found.{CLR_RESET}")
+                continue
+            print(f"Editing Sensor #{matched.get('id')} ({matched.get('name')}):")
+            new_name = input(f"New Name [current: {matched.get('name')}]: ").strip()
+            new_addr = input(f"New DB Address [current: {matched.get('address')}]: ").strip()
+            new_type = input(f"New Type [current: {matched.get('type')}]: ").strip().upper()
+            new_unit = input(f"New Unit [current: {matched.get('unit')}]: ").strip()
+            new_desc = input(f"New Description [current: {matched.get('desc')}]: ").strip()
+
+            if new_name: matched["name"] = new_name
+            if new_addr: matched["address"] = new_addr
+            if new_type: matched["type"] = new_type
+            if new_unit: matched["unit"] = new_unit
+            if new_desc: matched["desc"] = new_desc
+
+            save_config(cfg)
+            print(f"{CLR_GREEN}✓ Sensor #{matched.get('id')} updated successfully!{CLR_RESET}")
+        elif sub_choice == "3":
+            id_str = input("\nEnter Sensor ID to delete: ").strip()
+            idx_to_del = None
+            for i, t in enumerate(tags):
+                if str(t.get("id")) == id_str or t.get("name") == id_str:
+                    idx_to_del = i
+                    break
+            if idx_to_del is not None:
+                del tags[idx_to_del]
+                save_config(cfg)
+                print(f"{CLR_GREEN}✓ Sensor deleted successfully!{CLR_RESET}")
+            else:
+                print(f"{CLR_RED}Sensor '{id_str}' not found.{CLR_RESET}")
+
+
 # --- Interactive CLI Wizard ---
 def interactive_menu():
     while True:
@@ -583,12 +814,13 @@ def interactive_menu():
         print(f"  [{CLR_CYAN}4{CLR_RESET}] 🌐 กำหนด Cloud HTTPS Base URL")
         print(f"  [{CLR_CYAN}5{CLR_RESET}] 🏭 กำหนด IP ตู้ Siemens S7-1200 PLC")
         print(f"  [{CLR_CYAN}6{CLR_RESET}] ⏱️  กำหนดรอบเวลา Heartbeat & Batch Rate")
+        print(f"  [{CLR_CYAN}S{CLR_RESET}] 📊 จัดการแท็กและกำหนดเซนเซอร์ (Define Sensors & Memory Map)")
         print(f"  [{CLR_CYAN}7{CLR_RESET}] 🔍 ทดสอบเชื่อมต่อ Live HTTPS Cloud API")
         print(f"  [{CLR_CYAN}8{CLR_RESET}] 🌐 เปิด Web Configurator Dashboard (พอร์ต 8080)")
         print(f"  [{CLR_CYAN}R{CLR_RESET}] 🚀 รีสตาร์ท Gateway Service (systemctl restart plc-gateway)")
         print(f"  [{CLR_CYAN}0{CLR_RESET}] ออก (Exit)")
 
-        choice = input(f"\n{CLR_BOLD}Enter choice [0-8, R]: {CLR_RESET}").strip().upper()
+        choice = input(f"\n{CLR_BOLD}Enter choice [0-8, S, R]: {CLR_RESET}").strip().upper()
 
         if choice == "0":
             print("Exiting.")
@@ -650,6 +882,8 @@ def interactive_menu():
                 cfg.setdefault("api", {})["transmissionIntervalSec"] = int(new_tx)
             save_config(cfg)
             print(f"{CLR_GREEN}✓ Intervals updated.{CLR_RESET}")
+        elif choice == "S":
+            sensor_management_menu(cfg)
         elif choice == "7":
             base_url = cfg.get("api", {}).get("baseUrl")
             dev_id = cfg.get("deviceId")
@@ -677,6 +911,7 @@ def interactive_menu():
 def main():
     parser = argparse.ArgumentParser(description="IoT Edge Gateway Configuration & HTTPS Validation Tool")
     parser.add_argument("--view", "-v", action="store_true", help="Display current active configuration")
+    parser.add_argument("--sensors", "--list-sensors", action="store_true", help="Display all defined sensors & memory map")
     parser.add_argument("--test", "-t", action="store_true", help="Test live HTTPS Cloud API connection")
     parser.add_argument("--set-name", "-n", type=str, help="Set Device Name (e.g. GSE-PROTO-1)")
     parser.add_argument("--set-id", "--set-device", type=str, help="Set Cloud Device UUID")
@@ -727,6 +962,10 @@ def main():
 
     if args.restart:
         restart_gateway_service()
+
+    if args.sensors:
+        display_sensors(cfg)
+        return
 
     if args.view:
         display_config(cfg)
