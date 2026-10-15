@@ -268,7 +268,7 @@ class S7PLCClient:
         self.last_lifebit_state = False
 
         if not HAS_SNAP7:
-            logger.error("❌ ไม่พบไลบรารี python-snap7 ในระบบ! กรุณาติดตั้ง snap7 เพื่อเชื่อมต่อตู้ PLC จริง")
+            logger.error("❌ python-snap7 library not found! Please install snap7 to connect to physical PLC.")
 
     def connect(self):
         """Establishes connection to physical Siemens S7-1200 PLC with Auto-Discovery support."""
@@ -280,15 +280,15 @@ class S7PLCClient:
 
         # 1. If in auto mode, scan network to find PLC automatically
         if is_auto_mode:
-            logger.info("🔍 [Auto-Discovery] กำลังสแกนหาตู้ Siemens S7 PLC บนเครือข่ายอัตโนมัติ...")
+            logger.info("🔍 [Auto-Discovery] Scanning local subnet for Siemens S7 PLC (Port 102)...")
             found_plcs = discover_s7_plcs()
             if found_plcs:
                 best = found_plcs[0]
                 self.ip = best["ip"]
                 self.port = best["port"]
-                logger.info(f"✨ [Auto-Discovery] ตรวจพบตู้ Siemens S7 PLC อัตโนมัติที่ IP {self.ip}:{self.port} (Latency: {best['latency_ms']}ms, {best['details']})!")
+                logger.info(f"✨ [Auto-Discovery] Discovered Siemens S7 PLC at {self.ip}:{self.port} (Latency: {best['latency_ms']}ms, {best['details']})!")
             else:
-                logger.warning("⚠️ [Auto-Discovery] ไม่พบตู้ Siemens S7 PLC บนเครือข่าย! กรุณาตรวจสอบสาย LAN หรือเปิดตู้ PLC")
+                logger.warning("⚠️ [Auto-Discovery] No Siemens S7 PLC found on subnet! Please verify LAN cable or power status.")
                 self.connected = False
                 return False
 
@@ -300,14 +300,14 @@ class S7PLCClient:
                 self.client.connect(self.ip, self.rack, self.slot, self.port)
             self.connected = self.client.get_connected()
             if self.connected:
-                logger.info(f"✅ เชื่อมต่อตู้ PLC S7-1200 สำเร็จที่ {self.ip}:{self.port} (Rack: {self.rack}, Slot: {self.slot})")
+                logger.info(f"✅ Connected to Siemens S7-1200 PLC at {self.ip}:{self.port} (Rack: {self.rack}, Slot: {self.slot})")
                 return True
         except Exception:
             self.connected = False
 
         # 3. If failed and auto_discover is enabled, search for online S7 PLC on network
         if not self.connected and self.auto_discover:
-            logger.info(f"🔄 ไม่สามารถติดต่อ IP เดิม ({self.ip}:{self.port}) ได้ — กำลังสแกนหาตู้ PLC Siemens บนวง LAN อัตโนมัติ...")
+            logger.info(f"🔄 Target IP ({self.ip}:{self.port}) unreachable — Scanning local subnet for Siemens S7 PLC...")
             found_plcs = discover_s7_plcs()
             alternate_plcs = [p for p in found_plcs if p["ip"] != self.ip]
             if alternate_plcs:
@@ -315,18 +315,18 @@ class S7PLCClient:
                 old_ip = self.ip
                 self.ip = best["ip"]
                 self.port = best["port"]
-                logger.info(f"✨ [Auto-Discovery] ตรวจพบตู้ PLC Siemens อัตโนมัติที่ {self.ip}:{self.port} (Latency: {best['latency_ms']}ms)! สลับการเชื่อมต่อไปยัง IP นี้ทันที...")
+                logger.info(f"✨ [Auto-Discovery] Discovered alternate Siemens PLC at {self.ip}:{self.port} (Latency: {best['latency_ms']}ms)! Failing over...")
                 try:
                     self.client.connect(self.ip, self.rack, self.slot, self.port)
                     self.connected = self.client.get_connected()
                     if self.connected:
-                        logger.info(f"✅ เชื่อมต่อตู้ PLC สำเร็จผ่าน Auto-Discovery ที่ {self.ip}:{self.port} (สลับอัตโนมัติจาก {old_ip})")
+                        logger.info(f"✅ Connected to Siemens PLC via Auto-Discovery at {self.ip}:{self.port} (Swapped from {old_ip})")
                         return True
                 except Exception as ex:
-                    logger.warning(f"⚠️ พยายามเชื่อมต่อ PLC ที่ตรวจพบอัตโนมัติ {self.ip} ไม่สำเร็จ: {ex}")
+                    logger.warning(f"⚠️ Failed to connect to discovered PLC {self.ip}: {ex}")
 
         if not self.connected:
-            logger.warning(f"⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.ip}:{self.port}! ให้เชื่อมต่อข้อมูลจาก PLC")
+            logger.warning(f"⚠️ [NO DATA FROM PLC] Connection lost to Siemens S7-1200 at {self.ip}:{self.port}! Please connect physical PLC.")
         return self.connected
 
     def disconnect(self):
@@ -420,7 +420,7 @@ class S7PLCClient:
             raw_bytes = self.client.read_area(area, db_number, start, size)
             return format_sensor_reading(tag_config, raw_bytes, parsed)
         except Exception as e:
-            logger.warning(f"⚠️ [อ่านค่า Tag ไม่สำเร็จ] {name} ({address}): {e}")
+            logger.warning(f"⚠️ [TAG READ ERROR] {name} ({address}): {e}")
             self.connected = False
             return None
 
@@ -429,7 +429,7 @@ class S7PLCClient:
         if not self.is_connected():
             self.connect()
             if not self.is_connected():
-                logger.warning(f"⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.ip}:{self.port}! กรุณาเชื่อมต่อสาย LAN หรือเปิดตู้ PLC")
+                logger.warning(f"⚠️ [NO DATA FROM PLC] Connection lost to Siemens S7-1200 at {self.ip}:{self.port}! Please verify physical Ethernet cable.")
                 return {}
 
         # 1. Check if all tags belong to the same DB and can be read in a single bulk block

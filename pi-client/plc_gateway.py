@@ -293,8 +293,8 @@ class EdgeGatewayService:
                 # but LAN2 was meant for Internet, the physical Ethernet cables are swapped.
                 if default_iface == self.lan1_if and default_iface != self.lan2_if:
                     logger.warning(
-                        f"🔄 [AUTO-NETWORK] ตรวจพบสาย LAN สลับพอร์ต! Internet Default Gateway อยู่ที่ {default_iface}. "
-                        f"ทำการสลับบทบาท {default_iface} -> LAN2 (Internet) และ {self.lan2_if} -> LAN1 (PLC) อัตโนมัติ"
+                        f"🔄 [AUTO-NETWORK] Reversed Ethernet cables detected! Default Gateway is on {default_iface}. "
+                        f"Swapping roles: {default_iface} -> LAN2 (Internet) and {self.lan2_if} -> LAN1 (PLC) automatically."
                     )
                     self.lan1_if, self.lan2_if = self.lan2_if, self.lan1_if
                     self.mac_addresses = {
@@ -324,8 +324,8 @@ class EdgeGatewayService:
 
         if matched_profile:
             logger.info(
-                f"🎯 [AUTO-PROFILE] ตรวจพบลักษณะเฉพาะฮาร์ดแวร์: {matched_profile['name']} "
-                f"(SN: {self.serial_number}) -> ผูก Device UUID & API Key อัตโนมัติ"
+                f"🎯 [AUTO-PROFILE] Hardware profile detected: {matched_profile['name']} "
+                f"(SN: {self.serial_number}) -> Bound Device UUID & API Key automatically."
             )
             self.device_id = matched_profile["deviceId"]
             self.device_name = matched_profile["name"]
@@ -358,9 +358,9 @@ class EdgeGatewayService:
             # Trigger only on rising edge (transition from normal to emergency)
             if is_emergency and not self.last_emergency_state:
                 logger.warning(
-                    f"🚨 [EMERGENCY-TRIGGER] ตรวจพบเหตุฉุกเฉินกะทันหัน! "
+                    f"🚨 [EMERGENCY-TRIGGER] Critical emergency state transition detected! "
                     f"(Fault: {is_fault}, E-Stop Tripped: {is_estop_tripped}, Alarm: {alarm_code}) "
-                    f"-> ข้ามรอบเวลาปกติ ส่งข้อมูลขึ้น Cloud API ทันที!"
+                    f"-> Bypassing standard interval, transmitting alert batch immediately!"
                 )
                 self.last_emergency_state = True
                 return True
@@ -450,7 +450,7 @@ class EdgeGatewayService:
         net_status = self.get_network_status()
         queue_depth = self.buffer.get_queue_depth()
         plc_connected = self.plc.is_connected()
-        plc_alert = "เชื่อมต่อตู้ PLC สำเร็จ" if plc_connected else f"⚠️ ไม่มีข้อมูลจาก PLC! กรุณาเชื่อมต่อสายสัญญาณ PLC S7-1200 ที่ IP {self.plc.ip}:{self.plc.port}"
+        plc_alert = "PLC Connected" if plc_connected else f"⚠️ No data from PLC! Please connect physical S7-1200 cable at IP {self.plc.ip}:{self.plc.port}"
 
         payload = {
             "deviceId": self.device_id,
@@ -487,7 +487,7 @@ class EdgeGatewayService:
                 if plc_connected:
                     logger.info(f"💓 Heartbeat OK (HTTP {status_code}) | Runtime: {self.runtime_id[:8]}... | ✅ PLC: Connected (IP {self.plc.ip}) | Queue: {queue_depth}")
                 else:
-                    logger.warning(f"💓 Heartbeat OK (HTTP {status_code}) | Runtime: {self.runtime_id[:8]}... | ⚠️ PLC: Disconnected (ไม่มีข้อมูลจาก PLC ให้เชื่อมข้อมูลจาก PLC ที่ {self.plc.ip}:{self.plc.port})")
+                    logger.warning(f"💓 Heartbeat OK (HTTP {status_code}) | Runtime: {self.runtime_id[:8]}... | ⚠️ PLC: Disconnected (No data from PLC at {self.plc.ip}:{self.plc.port})")
                 return
             except urllib.error.HTTPError as e:
                 if e.code == 409:
@@ -646,8 +646,8 @@ class EdgeGatewayService:
             print(f"\n📡 Connecting to physical PLC at {self.plc.ip}:{self.plc.port}...")
             self.plc.connect()
             if not self.plc.is_connected():
-                print(f"\n⚠️  [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.plc.ip}:{self.plc.port}! ให้เชื่อมต่อข้อมูลจาก PLC")
-                print("💡 (หากต้องการทดสอบดูตัวอย่างการแปลง Raw Hex และโครงสร้าง Package แบบจำลองก่อนต่อสาย ให้ใช้คำสั่ง: plc-package --sample)\n")
+                print(f"\n⚠️  [NO DATA FROM PLC] Connection lost to Siemens S7-1200 at {self.plc.ip}:{self.plc.port}! Please connect physical PLC.")
+                print("💡 (To inspect simulated sensor decoding without physical hardware, run: plc-package --sample)\n")
                 return False
             tags_data = self.acquire_plc_data()
         else:
@@ -708,7 +708,7 @@ class EdgeGatewayService:
             else:
                 print("❌ Failed to initiate Cloud Runtime session. Check Device UUID / API Key.")
         else:
-            print("\n💡 (ต้องการส่ง Package นี้ขึ้น Cloud API ทันที? ให้รันคำสั่ง: plc-package --send)")
+            print("\n💡 (To transmit this batch package to Cloud API, run: plc-package --send)")
 
         print("=" * 110 + "\n")
         return True
@@ -717,7 +717,7 @@ class EdgeGatewayService:
         """Gathers PLC tags, system metrics, and sends to REST API. Buffers on failure."""
         tags_data = self.acquire_plc_data()
         if not tags_data or len(tags_data) == 0:
-            logger.warning(f"⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {self.plc.ip}:{self.plc.port}! ให้เชื่อมต่อข้อมูลจาก PLC — ข้ามรอบส่งข้อมูล Telemetry (กำลังรอรับข้อมูลจากตู้ PLC จริง...)")
+            logger.warning(f"⚠️ [NO DATA FROM PLC] Connection lost to Siemens S7-1200 at {self.plc.ip}:{self.plc.port}! Telemetry transmission deferred until physical PLC is online.")
             return
 
         queue_depth = self.buffer.get_queue_depth()

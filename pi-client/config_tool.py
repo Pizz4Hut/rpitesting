@@ -356,7 +356,7 @@ HTML_PAGE = """<!DOCTYPE html>
       <div class="card-title">🏷️ Device Identification & Cloud Connection</div>
       <div class="grid-2">
         <div class="form-group">
-          <label>Device Name (ชื่ออุปกรณ์)</label>
+          <label>Device Name (Asset Identifier)</label>
           <input type="text" id="deviceName" placeholder="e.g. GSE-PROTO-1">
         </div>
         <div class="form-group">
@@ -725,10 +725,10 @@ def sensor_management_menu(cfg):
     while True:
         display_sensors(cfg)
         print(f"{CLR_BOLD}Sensor & Memory Map Actions:{CLR_RESET}")
-        print(f"  [{CLR_CYAN}1{CLR_RESET}] ➕ เพิ่มเซนเซอร์ใหม่ (Define New Sensor)")
-        print(f"  [{CLR_CYAN}2{CLR_RESET}] ✏️  แก้ไขข้อมูลเซนเซอร์ (Edit Sensor Definition)")
-        print(f"  [{CLR_CYAN}3{CLR_RESET}] 🗑️  ลบเซนเซอร์ (Delete Sensor)")
-        print(f"  [{CLR_CYAN}0{CLR_RESET}] ↩️  ย้อนกลับ (Back to Main Menu)")
+        print(f"  [{CLR_CYAN}1{CLR_RESET}] ➕ Define New Sensor")
+        print(f"  [{CLR_CYAN}2{CLR_RESET}] ✏️  Edit Sensor Definition")
+        print(f"  [{CLR_CYAN}3{CLR_RESET}] 🗑️  Delete Sensor")
+        print(f"  [{CLR_CYAN}0{CLR_RESET}] ↩️  Back to Main Menu")
 
         sub_choice = input(f"\n{CLR_BOLD}Enter choice [0-3]: {CLR_RESET}").strip()
         tags = cfg.setdefault("tags", [])
@@ -808,19 +808,19 @@ def interactive_menu():
 
         display_config(cfg)
         print(f"{CLR_BOLD}Select an action:{CLR_RESET}")
-        print(f"  [{CLR_CYAN}1{CLR_RESET}] 🏷️  ตั้งชื่ออุปกรณ์ (Set Device Name)")
-        print(f"  [{CLR_CYAN}2{CLR_RESET}] 🆔 กำหนดรหัส Cloud Device UUID")
-        print(f"  [{CLR_CYAN}3{CLR_RESET}] 🔑 กำหนด Cloud API Key (x-api-key)")
-        print(f"  [{CLR_CYAN}4{CLR_RESET}] 🌐 กำหนด Cloud HTTPS Base URL")
-        print(f"  [{CLR_CYAN}5{CLR_RESET}] 🏭 กำหนด IP ตู้ Siemens S7-1200 PLC")
-        print(f"  [{CLR_CYAN}6{CLR_RESET}] ⏱️  กำหนดรอบเวลา Heartbeat & Batch Rate")
-        print(f"  [{CLR_CYAN}S{CLR_RESET}] 📊 จัดการแท็กและกำหนดเซนเซอร์ (Define Sensors & Memory Map)")
-        print(f"  [{CLR_CYAN}7{CLR_RESET}] 🔍 ทดสอบเชื่อมต่อ Live HTTPS Cloud API")
-        print(f"  [{CLR_CYAN}8{CLR_RESET}] 🌐 เปิด Web Configurator Dashboard (พอร์ต 8080)")
-        print(f"  [{CLR_CYAN}9{CLR_RESET}] 📦 ตรวจสอบการแปลง Raw Hex Data และ Web Batch Package (plc-package)")
-        print(f"  [{CLR_CYAN}A{CLR_RESET}] 🔍 สแกนค้นหาตู้ Siemens PLC อัตโนมัติ (Auto-Discover PLC on Network)")
-        print(f"  [{CLR_CYAN}R{CLR_RESET}] 🚀 รีสตาร์ท Gateway Service (systemctl restart plc-gateway)")
-        print(f"  [{CLR_CYAN}0{CLR_RESET}] ออก (Exit)")
+        print(f"  [{CLR_CYAN}1{CLR_RESET}] 🏷️  Set Device Name")
+        print(f"  [{CLR_CYAN}2{CLR_RESET}] 🆔 Set Cloud Device UUID")
+        print(f"  [{CLR_CYAN}3{CLR_RESET}] 🔑 Set Cloud API Key (x-api-key)")
+        print(f"  [{CLR_CYAN}4{CLR_RESET}] 🌐 Set Cloud HTTPS Base URL")
+        print(f"  [{CLR_CYAN}5{CLR_RESET}] 🏭 Set Siemens S7-1200 PLC IP")
+        print(f"  [{CLR_CYAN}6{CLR_RESET}] ⏱️  Set Heartbeat & Batch Rates")
+        print(f"  [{CLR_CYAN}S{CLR_RESET}] 📊 Define Sensors & Memory Map (19 Tags)")
+        print(f"  [{CLR_CYAN}7{CLR_RESET}] 🔍 Test Live HTTPS Cloud API Connection")
+        print(f"  [{CLR_CYAN}8{CLR_RESET}] 🌐 Launch Web Configurator Portal (Port 8080)")
+        print(f"  [{CLR_CYAN}9{CLR_RESET}] 📦 Inspect Raw Hex Data & Web Batch Package (plc-package)")
+        print(f"  [{CLR_CYAN}A{CLR_RESET}] 🔍 Auto-Discover Siemens S7 PLC on Local Network")
+        print(f"  [{CLR_CYAN}R{CLR_RESET}] 🚀 Restart Gateway Service (systemctl restart plc-gateway)")
+        print(f"  [{CLR_CYAN}0{CLR_RESET}] Exit")
 
         choice = input(f"\n{CLR_BOLD}Enter choice [0-9, S, A, R]: {CLR_RESET}").strip().upper()
 

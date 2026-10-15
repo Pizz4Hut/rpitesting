@@ -225,21 +225,21 @@ def run_full_diagnosis(config_path="config_plc.json"):
         # Trigger quick auto-discovery scan
         try:
             from plc_driver import discover_s7_plcs
-            print(f"{INFO_BADGE} 🔍 กำลังค้นหาตู้ Siemens PLC บน Subnet ท้องถิ่นอัตโนมัติ...")
+            print(f"{INFO_BADGE} 🔍 Scanning local subnet for Siemens S7 PLC (Port 102)...")
             disc = discover_s7_plcs()
             if disc:
-                print(f"{PASS_BADGE} ✨ [Auto-Discovery] ตรวจพบตู้ Siemens S7 PLC อยู่ที่ IP {disc[0]['ip']}:{disc[0]['port']} (Latency: {disc[0]['latency_ms']}ms)!")
-                print(f"         • ระบบ Gateway จะเชื่อมต่อไปยัง IP นี้ให้อัตโนมัติ")
-                print(f"         • หรือสามารถบันทึกถาวรด้วยคำสั่ง: plc-config --set-plc-ip {disc[0]['ip']}")
+                print(f"{PASS_BADGE} ✨ [Auto-Discovery] Discovered Siemens S7 PLC at {disc[0]['ip']}:{disc[0]['port']} (Latency: {disc[0]['latency_ms']}ms)!")
+                print(f"         • Gateway will automatically bind to this IP on start")
+                print(f"         • Or bind permanently using: plc-config --set-plc-ip {disc[0]['ip']}")
             else:
-                print(f"{WARN_BADGE} ⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}!")
-                print(f"         • ให้เชื่อมต่อสาย LAN จากตู้ PLC S7-1200 เข้าพอร์ต eth0 ของ Raspberry Pi")
-                print(f"         • ตรวจสอบว่าตู้ PLC S7-1200 เปิดสวิตช์และไฟสถานะ RUN ติดสว่าง")
-                print(f"         • ใน Siemens TIA Portal ต้องติ๊กถูก 'Permit access with PUT/GET communication from remote partner'")
-                issues.append(f"ไม่มีข้อมูลจาก PLC: ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}")
+                print(f"{WARN_BADGE} ⚠️ [NO DATA FROM PLC] Connection lost to Siemens S7-1200 at {plc_ip}:{plc_port}!")
+                print(f"         • Connect Ethernet cable from Siemens S7-1200 to Raspberry Pi eth0")
+                print(f"         • Ensure PLC is powered on with RUN LED illuminated (green)")
+                print(f"         • In TIA Portal CPU properties, ensure 'Permit access with PUT/GET' is checked")
+                issues.append(f"No data from PLC: Connection lost to Siemens S7-1200 at {plc_ip}:{plc_port}")
         except Exception:
-            print(f"{WARN_BADGE} ⚠️ [ไม่มีข้อมูลจาก PLC] ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}!")
-            issues.append(f"ไม่มีข้อมูลจาก PLC: ขาดการเชื่อมต่อกับตู้ PLC S7-1200 ที่ IP {plc_ip}:{plc_port}")
+            print(f"{WARN_BADGE} ⚠️ [NO DATA FROM PLC] Connection lost to Siemens S7-1200 at {plc_ip}:{plc_port}!")
+            issues.append(f"No data from PLC: Connection lost to Siemens S7-1200 at {plc_ip}:{plc_port}")
 
     # -------------------------------------------------------------
     # 4. REST API ENDPOINTS & CLOUD RUNTIME HEALTH
@@ -355,9 +355,9 @@ def run_full_diagnosis(config_path="config_plc.json"):
             print(f"  {idx}. {item}")
 
         print(f"\n{CYAN}{BOLD}💡 Troubleshooting Quick-Fix Guide:{RESET}")
-        print("  • หากขึ้น 'ไม่มีข้อมูลจาก PLC': ให้เสียบสาย LAN จากตู้ PLC S7-1200 เข้าบอร์ด Pi และเปิดสวิตช์ตู้ PLC")
-        print("  • หากต้องการเช็ค/สลับการตั้งค่าบอร์ด 1 หรือ 2: รันคำสั่ง 'plc-config'")
-        print("  • หากต้องการดู Log การทำงานแบบ Real-time: รันคำสั่ง 'plc-logs' (หรือ sudo journalctl -u plc-gateway -f)")
+        print("  • If 'NO DATA FROM PLC' is shown: Verify Ethernet cable to S7-1200 and ensure PLC power RUN is active.")
+        print("  • To view/modify configuration: Run 'plc-config' or 'gateway'.")
+        print("  • To monitor live runtime streaming logs: Run 'plc-logs' (or sudo journalctl -u plc-gateway -f).")
 
     print(f"{BOLD}{'=' * 68}\n{RESET}")
 
